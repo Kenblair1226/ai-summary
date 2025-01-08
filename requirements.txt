@@ -1,0 +1,7 @@
+pytube
+openai
+beautifulsoup4
+feedparser
+python-dotenv
+requests
+yt-dlp

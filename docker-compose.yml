@@ -1,0 +1,11 @@
+
+version: '3.8'
+
+services:
+  yt-summary:
+    build: .
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    restart: unless-stopped
