@@ -1,8 +1,10 @@
-pytube
+pytubefix
 openai
+google-generativeai
 beautifulsoup4
 feedparser
 python-dotenv
 requests
 yt-dlp
 schedule
+python-telegram-bot

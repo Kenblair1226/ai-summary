@@ -15,7 +15,6 @@ from youtube_helper import download_audio_from_youtube, check_new_videos
 from genai_helper import article_mp3, summarize_article
 from summarize_and_post import post_to_wordpress
 from telegram_bot import notify_subscribers, start_bot
-from datetime import datetime
 from email.utils import parsedate_to_datetime
 
 load_dotenv()
