@@ -4,6 +4,7 @@ import uuid
 import shutil
 import logging
 import asyncio
+import schedule
 import feedparser
 from bs4 import BeautifulSoup
 import requests
@@ -238,14 +239,19 @@ async def process_podcast_feeds():
     logging.info("Finished processing podcast feeds")
 
 def content_processing_loop():
+    # run on startup
+    try:
+        asyncio.run(run_content_processor())
+    except Exception as e:
+        logging.error(f"Error processing content on startup:{e}")
+
+    # Schedule jobs to run at 8 AM and 8 PM
+    schedule.every().day.at("08:00").do(lambda: asyncio.run(run_content_processor()))
+    schedule.every().day.at("20:00").do(lambda: asyncio.run(run_content_processor()))
+    
     while True:
-        try:
-            # Run both processes in the same event loop
-            asyncio.run(run_content_processor())
-        except Exception as e:
-            logging.error(f"Error in content processing loop: {e}")
-        logging.info("Sleeping for 8 hours before next check")
-        time.sleep(8 * 60 * 60)
+        schedule.run_pending()
+        time.sleep(60)  # Check schedule every minute
 
 async def run_content_processor():
     """Runs video, RSS feed, and podcast processing in the same event loop"""
