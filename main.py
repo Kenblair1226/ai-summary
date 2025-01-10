@@ -245,8 +245,8 @@ def content_processing_loop():
         logging.error(f"Error processing content on startup:{e}")
 
     # Schedule jobs to run at 8 AM and 8 PM
-    schedule.every().day.at("08:00").do(lambda: asyncio.run(run_content_processor()))
-    schedule.every().day.at("20:00").do(lambda: asyncio.run(run_content_processor()))
+    schedule.every().day.at("00:00").do(lambda: asyncio.run(run_content_processor()))
+    schedule.every().day.at("12:00").do(lambda: asyncio.run(run_content_processor()))
     
     while True:
         schedule.run_pending()

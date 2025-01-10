@@ -63,6 +63,35 @@ def extract_video_id(url):
             return match.group(1).split('?')[0]  # Remove query parameters
     return None
 
+def is_podcast_feed(url):
+    """Check if URL is likely a podcast feed by looking for common podcast indicators"""
+    try:
+        import feedparser
+        feed = feedparser.parse(url)
+        
+        # Check for common podcast feed indicators
+        if feed.entries:
+            # Check feed level indicators
+            feed_type = feed.feed.get('type', '').lower()
+            if 'podcast' in feed_type:
+                return True
+                
+            # Check for iTunes specific tags
+            itunes_present = any(key.startswith('itunes') for key in feed.feed.keys())
+            if itunes_present:
+                return True
+            
+            # Check first entry for enclosures (audio files)
+            first_entry = feed.entries[0]
+            if hasattr(first_entry, 'enclosures') and first_entry.enclosures:
+                for enclosure in first_entry.enclosures:
+                    if 'audio' in enclosure.get('type', ''):
+                        return True
+        
+        return False
+    except:
+        return False
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         'Welcome! Available commands:\n'
@@ -107,11 +136,18 @@ async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Extract website name from URL for RSS feed
                 site_name = extract_website_name(url)
                 cursor = conn.cursor()
-                cursor.execute('INSERT OR IGNORE INTO rss_feeds (url, name) VALUES (?, ?)', (url, site_name))
-                if cursor.rowcount > 0:
-                    await update.message.reply_text(f'Successfully added RSS feed from {site_name}: {url}')
+                
+                if is_podcast_feed(url):
+                    cursor.execute('INSERT OR IGNORE INTO podcast_feeds (url, name) VALUES (?, ?)', (url, site_name))
+                    feed_type = "podcast feed"
                 else:
-                    await update.message.reply_text('This RSS feed is already in the database.')
+                    cursor.execute('INSERT OR IGNORE INTO article_feeds (url, name) VALUES (?, ?)', (url, site_name))
+                    feed_type = "article feed"
+                
+                if cursor.rowcount > 0:
+                    await update.message.reply_text(f'Successfully added {feed_type} from {site_name}: {url}')
+                else:
+                    await update.message.reply_text(f'This {feed_type} is already in the database.')
             conn.commit()
     except Exception as e:
         logging.error(f"Error adding URL: {e}")
