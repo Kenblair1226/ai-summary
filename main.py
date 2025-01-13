@@ -239,10 +239,10 @@ async def process_podcast_feeds():
 
 def content_processing_loop():
     # run on startup
-    try:
-        asyncio.run(run_content_processor())
-    except Exception as e:
-        logging.error(f"Error processing content on startup:{e}")
+    # try:
+    #     asyncio.run(run_content_processor())
+    # except Exception as e:
+    #     logging.error(f"Error processing content on startup:{e}")
 
     # Schedule jobs to run at 8 AM and 8 PM
     schedule.every().day.at("00:00").do(lambda: asyncio.run(run_content_processor()))

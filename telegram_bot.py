@@ -225,25 +225,32 @@ async def process_updates(update_queue: asyncio.Queue):
             update = await update_queue.get()
             if isinstance(update, Update):
                 if update.message and update.message.text:
-                    context = ContextTypes.DEFAULT_TYPE(application=app)
-                    if update.message.text == '/start':
-                        await start(update, context)
-                    elif update.message.text == '/subscribe':
-                        await subscribe(update, context)
-                    elif update.message.text == '/unsubscribe':
-                        await unsubscribe(update, context)
-                    elif update.message.text.startswith('/add'):
-                        # Extract URL from message and create args
-                        args = update.message.text.split()[1:]
-                        context.args = args
-                        await add(update, context)
-                    elif update.message.text.startswith('/yt'):
-                        args = update.message.text.split()[1:]
-                        context.args = args
-                        await yt(update, context)
+                    try:
+                        context = ContextTypes.DEFAULT_TYPE(application=app)
+                        if update.message.text == '/start':
+                            await start(update, context)
+                        elif update.message.text == '/subscribe':
+                            await subscribe(update, context)
+                        elif update.message.text == '/unsubscribe':
+                            await unsubscribe(update, context)
+                        elif update.message.text.startswith('/add'):
+                            args = update.message.text.split()[1:]
+                            context.args = args
+                            await add(update, context)
+                        elif update.message.text.startswith('/yt'):
+                            args = update.message.text.split()[1:]
+                            context.args = args
+                            await yt(update, context)
+                    except RuntimeError as e:
+                        if 'Event loop is closed' in str(e):
+                            logging.error("Event loop was closed, attempting to recover...")
+                            await asyncio.sleep(1)
+                            continue
+                        raise
             update_queue.task_done()
         except Exception as e:
             logging.error(f"Error processing update: {e}")
+            await asyncio.sleep(1)  # Add delay before retry
 
 async def get_updates(update_queue: asyncio.Queue):
     """Get updates and put them in queue, similar to Golang's GetUpdatesChan"""
@@ -262,15 +269,26 @@ async def run_bot():
     """Run bot with update channel pattern"""
     update_queue = asyncio.Queue()
     
-    # Start update fetcher and processor
-    asyncio.create_task(get_updates(update_queue))
-    asyncio.create_task(process_updates(update_queue))
+    # Create tasks
+    tasks = [
+        asyncio.create_task(get_updates(update_queue)),
+        asyncio.create_task(process_updates(update_queue))
+    ]
     
     logging.info("Bot started with update channel pattern")
     
-    # Keep the bot running
-    while True:
-        await asyncio.sleep(60)
+    try:
+        # Wait for all tasks to complete
+        await asyncio.gather(*tasks, return_exceptions=True)
+    except Exception as e:
+        logging.error(f"Error in main bot loop: {e}")
+    finally:
+        # Cancel all running tasks
+        for task in tasks:
+            task.cancel()
+        
+        # Wait for all tasks to be cancelled
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 async def test_send_message():
     """Test function to send a proactive message"""
@@ -284,7 +302,16 @@ async def test_send_message():
 
 def start_bot():
     """Entry point for the bot"""
-    asyncio.run(run_bot())
+    while True:
+        try:
+            asyncio.run(run_bot())
+        except Exception as e:
+            logging.error(f"Bot crashed: {e}")
+            logging.info("Restarting bot in 5 seconds...")
+            time.sleep(5)
+
+# Add this import at the top of the file
+import time
 
 if __name__ == '__main__':
     import sys
