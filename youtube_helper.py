@@ -4,7 +4,7 @@ from pytubefix import YouTube, Channel
 from db_helper import initialize_db, get_checked_video_ids, save_checked_video_ids, connect_db
 
 def download_audio_from_youtube(video_url, output_path):
-    yt = YouTube(video_url)
+    yt = YouTube(video_url, use_po_token=True)
     title = yt.title
     audio_stream = yt.streams.filter(only_audio=True).first()
     audio_file = audio_stream.download(output_path=output_path)
