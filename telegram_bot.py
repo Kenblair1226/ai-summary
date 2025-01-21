@@ -193,7 +193,7 @@ async def yt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Error processing YouTube video: {e}")
         await update.message.reply_text('Failed to process the video. Please try again later.')
 
-async def notify_subscribers(post_title, video_url):
+async def notify_subscribers(post_title, post_url, category=None):
     max_retries = 3
     retry_delay = 5
     
@@ -201,11 +201,14 @@ async def notify_subscribers(post_title, video_url):
         try:
             subscribers = db.get_subscribers()
             
+            category_text = f"[{category}] " if category else ""
+            message_text = f"New post: {category_text}{post_title}\n{post_url}"
+            
             for chat_id in subscribers:
                 try:
                     await app.bot.send_message(
                         chat_id=chat_id,
-                        text=f"New post: {post_title}\n{video_url}"
+                        text=message_text
                     )
                 except Exception as e:
                     logging.error(f"Failed to send message to {chat_id}: {e}")

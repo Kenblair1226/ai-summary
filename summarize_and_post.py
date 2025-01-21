@@ -19,8 +19,8 @@ CATEGORY_IDS = {
     "sharptech"         : 18,
     "anotherpodcast"    : 25,
     "joerogan"          : 26,
-    "NVIDIA"            : 27,
-    "ACQ2"              : 28,
+    "nvidia"            : 27,
+    "acq2"              : 28,
 
 }
 

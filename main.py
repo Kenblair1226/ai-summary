@@ -52,7 +52,8 @@ async def process_new_videos():
                     response = post_to_wordpress(post_title, article, video_url, None, channel_url)
                     if response:
                         logging.info(f"Summary posted to WordPress successfully for video {video_url}.")
-                        await notify_subscribers(post_title, response)  # Pass WordPress post URL
+                        channel_handle = channel_url.split('/')[-1]
+                        await notify_subscribers(post_title, response, channel_handle)
                     else:
                         logging.error(f"Failed to post summary to WordPress for video {video_url}.")
                     
@@ -104,7 +105,7 @@ async def process_rss_feeds():
                         conn.commit()
                     logging.info(f"Summary posted to WordPress successfully for article: {entry.link}")
                     db.save_processed_article(article_id, entry.link, entry.title)
-                    await notify_subscribers(post_title, response)  # Pass WordPress post URL
+                    await notify_subscribers(post_title, response, name)
                 else:
                     logging.error("Failed to post summary to WordPress")
                     
@@ -218,7 +219,7 @@ async def process_podcast_feeds():
                             conn.commit()
                         logging.info(f"Summary posted to WordPress successfully for podcast: {entry.title}")
                         db.save_processed_episode(episode_id, entry.link, entry.title, feed_id)
-                        await notify_subscribers(post_title, response)  # Pass WordPress post URL
+                        await notify_subscribers(post_title, response, name)
                     else:
                         logging.error("Failed to post summary to WordPress")
                 
