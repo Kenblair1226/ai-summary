@@ -20,8 +20,8 @@ CATEGORY_IDS = {
     "anotherpodcast"    : 25,
     "joerogan"          : 26,
     "nvidia"            : 27,
-    "acq2"              : 28,
-
+    "acq"               : 28,
+    "a16z"              : 30,
 }
 
 def extract_channel_handle(channel_url):
