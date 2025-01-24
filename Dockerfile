@@ -5,6 +5,9 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+    apt-get install -y nodejs \
+    npm install youtube-po-token-generator
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
