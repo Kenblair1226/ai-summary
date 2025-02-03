@@ -13,7 +13,7 @@ import urllib.request
 from db_helper import DbHelper
 from youtube_helper import download_audio_from_youtube, check_new_videos
 from genai_helper import article_mp3, summarize_article
-from summarize_and_post import post_to_wordpress
+from summarize_and_post import post_to_wordpress, post_to_ghost
 from telegram_bot import notify_subscribers, start_bot
 from email.utils import parsedate_to_datetime
 
@@ -50,12 +50,13 @@ async def process_new_videos():
                     logging.info(f"Generating article for video: {video_url}")
                     post_title, article = article_mp3(title, new_file)
                     response = post_to_wordpress(post_title, article, video_url, None, channel_url)
+                    response = post_to_ghost(post_title, article, video_url, None, channel_url)
                     if response:
-                        logging.info(f"Summary posted to WordPress successfully for video {video_url}.")
+                        logging.info(f"Summary posted to WordPress/Ghost successfully for video {video_url}.")
                         channel_handle = channel_url.split('/')[-1]
                         await notify_subscribers(post_title, response, channel_handle)
                     else:
-                        logging.error(f"Failed to post summary to WordPress for video {video_url}.")
+                        logging.error(f"Failed to post summary to WordPress/Ghost for video {video_url}.")
                     
                     shutil.rmtree(path)
             else:
@@ -96,18 +97,18 @@ async def process_rss_feeds():
                 # Generate summary using Gemini
                 post_title, article = summarize_article(entry.title, article_text)
                 
-                # Post to WordPress
+                # Post to WordPress/Ghost
                 response = post_to_wordpress(post_title, article, None, entry.link, name)
-                
+                response = post_to_ghost(post_title, article, None, entry.link, name)
                 if response:
                     with db.get_connection() as conn:
                         conn.execute('UPDATE rss_feeds SET last_check = CURRENT_TIMESTAMP WHERE id = ?', (feed_id,))
                         conn.commit()
-                    logging.info(f"Summary posted to WordPress successfully for article: {entry.link}")
+                    logging.info(f"Summary posted to WordPress/Ghost successfully for article: {entry.link}")
                     db.save_processed_article(article_id, entry.link, entry.title)
                     await notify_subscribers(post_title, response, name)
                 else:
-                    logging.error("Failed to post summary to WordPress")
+                    logging.error("Failed to post summary to WordPress/Ghost")
                     
             except Exception as e:
                 logging.error(f"Error processing article {entry.link}: {str(e)}")
@@ -210,18 +211,18 @@ async def process_podcast_feeds():
                     # Rest of the processing
                     post_title, article = article_mp3(entry.title, mp3_path)
                 
-                    # Post to WordPress
+                    # Post to WordPress/Ghost
                     response = post_to_wordpress(post_title, article, None, entry.link, name)
-                
+                    response = post_to_ghost(post_title, article, None, entry.link, name)
                     if response:
                         with db.get_connection() as conn:
                             conn.execute('UPDATE podcast_feeds SET last_check = CURRENT_TIMESTAMP WHERE id = ?', (feed_id,))
                             conn.commit()
-                        logging.info(f"Summary posted to WordPress successfully for podcast: {entry.title}")
+                        logging.info(f"Summary posted to WordPress/Ghost successfully for podcast: {entry.title}")
                         db.save_processed_episode(episode_id, entry.link, entry.title, feed_id)
                         await notify_subscribers(post_title, response, name)
                     else:
-                        logging.error("Failed to post summary to WordPress")
+                        logging.error("Failed to post summary to WordPress/Ghost")
                 
                     # Cleanup
                     shutil.rmtree(path)

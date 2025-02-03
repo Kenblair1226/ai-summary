@@ -8,3 +8,4 @@ requests
 yt-dlp
 schedule
 python-telegram-bot
+PyJWT
