@@ -128,6 +128,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
             'tags': tags,
             'visibility': 'public',
             'featured': False,
+            'slug': generate_slug(title, content),
             'excerpt': content[:300] + '...' if len(content) > 300 else content,
             'metadata': {
                 'meta_title': title,
