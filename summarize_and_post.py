@@ -9,6 +9,7 @@ from youtube_helper import download_audio_from_youtube
 import uuid
 import shutil
 import json
+import re
 
 load_dotenv()
 
@@ -74,6 +75,95 @@ def post_to_wordpress(title, content, video_url, post_url, channel_url):
         return response.json()['link']
     return None
 
+def create_lexical_content(content_html, video_url=None):
+    nodes = []
+    
+    if video_url:
+        # Add video embed as iframe
+        video_id = video_url.split('/')[-1]
+        nodes.append({
+            "type": "paragraph",
+            "version": 1,
+            "children": [{
+                "type": "text",
+                "text": ""
+            }]
+        })
+        nodes.append({
+            "type": "video",
+            "version": 1,
+            "src": f"https://www.youtube.com/embed/{video_id}",
+            "format": "",
+            "caption": "",
+            "width": 560,
+            "height": 315
+        })
+    
+    # Split content into paragraphs and add each as a node
+    paragraphs = content_html.split('\n')
+    for para in paragraphs:
+        if para.strip():  # Skip empty paragraphs
+            nodes.append({
+                "type": "paragraph",
+                "version": 1,
+                "children": [{
+                    "type": "text",
+                    "text": para.strip()
+                }]
+            })
+    
+    # Add source link
+    if video_url:
+        nodes.append({
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+                {
+                    "type": "text",
+                    "text": "原始影片："
+                },
+                {
+                    "type": "link",
+                    "version": 1,
+                    "url": video_url,
+                    "rel": None,
+                    "target": None,
+                    "children": [{
+                        "type": "text",
+                        "text": video_url
+                    }]
+                }
+            ]
+        })
+    
+    return {
+        "root": {
+            "type": "root",
+            "format": "",
+            "indent": 0,
+            "version": 1,
+            "children": nodes
+        }
+    }
+
+def remove_html_tags(text):
+    """
+    Remove HTML tags from a string using regex.
+    
+    Args:
+        text (str): String containing HTML tags
+        
+    Returns:
+        str: Clean text without HTML tags
+    """
+    # Pattern matches any HTML tag including attributes
+    pattern = re.compile('<[^>]+>')
+    # Replace all HTML tags with empty string
+    clean_text = pattern.sub('', text)
+    # Remove extra whitespace
+    clean_text = ' '.join(clean_text.split())
+    return clean_text
+
 def post_to_ghost(title, content, video_url, post_url, channel_url):
     ghost_url = os.getenv('ghost_url', 'https://ghost.neorex.xyz').rstrip('/')
     ghost_key = os.getenv('ghost_key')
@@ -102,43 +192,22 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
     channel_handle = extract_channel_handle(channel_url)
     tags = [{'name': 'summary'}, {'name': channel_handle}] if channel_handle else [{'name': 'summary'}]
     
-    if video_url is not None:
-        # Add video embed to content
-        formatted_content = f"""
-<div class="kg-card kg-embed-card">
-    <iframe width="560" height="315" 
-            src="https://www.youtube.com/embed/{video_url.split('/')[-1]}" 
-            frameborder="0" 
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-            allowfullscreen>
-    </iframe>
-</div>
-
-{content}
-
-<p>原始影片：<a href="{video_url}">{video_url}</a></p>"""
-    else:
-        formatted_content = f'{content}\n\n<p>原始連結：<a href="{post_url}">{post_url}</a></p>'
+    # Remove HTML tags from the title
+    clean_title = remove_html_tags(title)
+    
+    # Remove HTML tags from content before creating lexical content
+    clean_content = content.replace('<p>', '').replace('</p>', '\n')
+    lexical_content = create_lexical_content(clean_content, video_url)
 
     headers = {
         'Authorization': f'Ghost {token}',
         'Content-Type': 'application/json'
     }
 
-    # Remove HTML tags from the title
-    clean_title = ''.join(c for c in title if c.isalnum() or c.isspace())
-
     data = {
         "posts": [{
             'title': clean_title,
-            'html': formatted_content,
-            'mobiledoc': json.dumps({
-                "version": "0.3.1",
-                "markups": [],
-                "atoms": [],
-                "cards": [["html", {"html": formatted_content}]],
-                "sections": [[10, 0]]
-            }),
+            'lexical': json.dumps(lexical_content),
             'status': 'published',
             'tags': tags,
             'visibility': 'public',
