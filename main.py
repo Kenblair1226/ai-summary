@@ -49,8 +49,8 @@ async def process_new_videos():
                     
                     logging.info(f"Generating article for video: {video_url}")
                     post_title, article = article_mp3(title, new_file)
-                    response = post_to_wordpress(post_title, article, video_url, None, channel_url)
                     response = post_to_ghost(post_title, article, video_url, None, channel_url)
+                    response = post_to_wordpress(post_title, article, video_url, None, channel_url)
                     if response:
                         logging.info(f"Summary posted to WordPress/Ghost successfully for video {video_url}.")
                         channel_handle = channel_url.split('/')[-1]
@@ -98,8 +98,8 @@ async def process_rss_feeds():
                 post_title, article = summarize_article(entry.title, article_text)
                 
                 # Post to WordPress/Ghost
-                response = post_to_wordpress(post_title, article, None, entry.link, name)
                 response = post_to_ghost(post_title, article, None, entry.link, name)
+                response = post_to_wordpress(post_title, article, None, entry.link, name)
                 if response:
                     with db.get_connection() as conn:
                         conn.execute('UPDATE rss_feeds SET last_check = CURRENT_TIMESTAMP WHERE id = ?', (feed_id,))
@@ -212,8 +212,8 @@ async def process_podcast_feeds():
                     post_title, article = article_mp3(entry.title, mp3_path)
                 
                     # Post to WordPress/Ghost
-                    response = post_to_wordpress(post_title, article, None, entry.link, name)
                     response = post_to_ghost(post_title, article, None, entry.link, name)
+                    response = post_to_wordpress(post_title, article, None, entry.link, name)
                     if response:
                         with db.get_connection() as conn:
                             conn.execute('UPDATE podcast_feeds SET last_check = CURRENT_TIMESTAMP WHERE id = ?', (feed_id,))

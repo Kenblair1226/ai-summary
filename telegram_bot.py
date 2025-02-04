@@ -11,7 +11,7 @@ import uuid
 import shutil
 from youtube_helper import download_audio_from_youtube
 from genai_helper import article_mp3
-from summarize_and_post import post_to_wordpress
+from summarize_and_post import post_to_wordpress, post_to_ghost
 
 load_dotenv()
 db = DbHelper(os.getenv('DB_PATH', 'database.db'))
@@ -179,6 +179,7 @@ async def yt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         post_title, article = article_mp3(title, new_file)
         
         # Post to WordPress
+        response = post_to_ghost(post_title, article, video_url, None, "YouTube")
         response = post_to_wordpress(post_title, article, video_url, None, "YouTube")
         
         if response:
