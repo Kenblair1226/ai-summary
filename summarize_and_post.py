@@ -75,29 +75,44 @@ def post_to_wordpress(title, content, video_url, post_url, channel_url):
         return response.json()['link']
     return None
 
-def create_lexical_content(content_html, video_url=None):
+def extract_youtube_id(url):
+    """Extract YouTube video ID from various URL formats"""
+    patterns = [
+        r'(?:youtu\.be/|youtube\.com/embed/|youtube\.com/watch\?v=)([^&?/]+)',
+        r'(?:youtube\.com/shorts/)([^&?/]+)'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+def create_lexical_content(content_html, video_url=None, post_url=None):
     nodes = []
     
     if video_url:
         # Add video embed as iframe
-        video_id = video_url.split('/')[-1]
-        nodes.append({
-            "type": "paragraph",
-            "version": 1,
-            "children": [{
-                "type": "text",
-                "text": ""
-            }]
-        })
-        nodes.append({
-            "type": "video",
-            "version": 1,
-            "src": f"https://www.youtube.com/embed/{video_id}",
-            "format": "",
-            "caption": "",
-            "width": 560,
-            "height": 315
-        })
+        video_id = extract_youtube_id(video_url)
+        if video_id:
+            nodes.append({
+                "type": "paragraph",
+                "version": 1,
+                "children": [{
+                    "type": "text",
+                    "text": ""
+                }]
+            })
+            nodes.append({
+                "type": "embed",
+                "version": 1,
+                "embedType": "video",
+                "url": f"https://www.youtube.com/embed/{video_id}",
+                "html": f"<iframe width=\"200\" height=\"113\" src=\"https://www.youtube.com/embed/{video_id}?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen ></iframe>",
+                "caption": "",
+                "width": 200,
+                "height": 113
+            })
     
     # Split content into paragraphs and add each as a node
     paragraphs = content_html.split('\n')
@@ -131,6 +146,28 @@ def create_lexical_content(content_html, video_url=None):
                     "children": [{
                         "type": "text",
                         "text": video_url
+                    }]
+                }
+            ]
+        })
+    elif post_url:
+        nodes.append({
+            "type": "paragraph",
+            "version": 1,
+            "children": [
+                {
+                    "type": "text",
+                    "text": "原始連結："
+                },
+                {
+                    "type": "link",
+                    "version": 1,
+                    "url": post_url,
+                    "rel": None,
+                    "target": None,
+                    "children": [{
+                        "type": "text",
+                        "text": post_url
                     }]
                 }
             ]
@@ -197,7 +234,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
     
     # Remove HTML tags from content before creating lexical content
     clean_content = content.replace('<p>', '').replace('</p>', '\n')
-    lexical_content = create_lexical_content(clean_content, video_url)
+    lexical_content = create_lexical_content(clean_content, video_url, post_url)
 
     headers = {
         'Authorization': f'Ghost {token}',
@@ -215,7 +252,6 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
             'slug': generate_slug(clean_title, content)
         }]
     }
-
     try:
         response = requests.post(
             f"{ghost_url}/ghost/api/admin/posts/", 
@@ -232,25 +268,68 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
         print(f"Failed to post to Ghost: {str(e)}")
         return None
 
+def get_ghost_posts():
+    ghost_url = os.getenv('ghost_url', 'https://ghost.neorex.xyz').rstrip('/')
+    ghost_key = os.getenv('ghost_key')
+    
+    # Split the key into ID and SECRET
+    [id, secret] = ghost_key.split(':')
+    
+    # Create the token
+    iat = int(datetime.datetime.now().timestamp())
+    
+    header = {
+        'alg': 'HS256',
+        'typ': 'JWT',
+        'kid': id
+    }
+    
+    payload = {
+        'iat': iat,
+        'exp': iat + 5 * 60,
+        'aud': '/admin/'
+    }
+
+    token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+
+    headers = {
+        'Authorization': f'Ghost {token}',
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        response = requests.get(
+            f"{ghost_url}/ghost/api/admin/posts/",
+            headers=headers
+        )
+
+        print(f"Response content: {response.text}")
+        return None
+    except Exception as e:
+        print(f"Failed to post to Ghost: {str(e)}")
+        return None
+    
 if __name__ == "__main__":
     video_url = "https://youtu.be/H6j8LfgQl9k"
-    path = f"{uuid.uuid4()}"
-    title, new_file = download_audio_from_youtube(video_url, path)
-    new_file = f"{path}/{title}.mp3"
-    post_title, article = article_mp3(title, new_file)
+    # path = f"{uuid.uuid4()}"
+    # title, new_file = download_audio_from_youtube(video_url, path)
+    # new_file = f"{path}/{title}.mp3"
+    # post_title, article = article_mp3(title, new_file)
     
-    # Post to WordPress
-    wp_response = post_to_wordpress(post_title, article, video_url, None, "https://youtube.com/@sharptechpodcast")
-    if wp_response:
-        print(f"Summary posted to WordPress successfully. Post URL: {wp_response}")
-    else:
-        print("Failed to post summary to WordPress.")
+    # # Post to WordPress
+    # wp_response = post_to_wordpress(post_title, article, video_url, None, "https://youtube.com/@sharptechpodcast")
+    # if wp_response:
+    #     print(f"Summary posted to WordPress successfully. Post URL: {wp_response}")
+    # else:
+    #     print("Failed to post summary to WordPress.")
     
     # Post to Ghost
-    ghost_response = post_to_ghost("test", "test content", video_url, None, "https://youtube.com/@sharptechpodcast")
+    ghost_response = post_to_ghost("<p>test</p>", "test content", video_url, None, "https://youtube.com/@sharptechpodcast")
     if ghost_response:
         print(f"Summary posted to Ghost successfully. Post URL: {ghost_response}")
     else:
         print("Failed to post summary to Ghost.")
     
+    # get_ghost_posts()
+
     # shutil.rmtree(path)
