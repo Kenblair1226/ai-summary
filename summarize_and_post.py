@@ -4,7 +4,7 @@ import requests
 from base64 import b64encode
 import jwt
 import datetime
-from genai_helper import article_mp3, generate_slug
+from genai_helper import article_mp3, generate_slug, humanize_content
 from youtube_helper import download_audio_from_youtube
 import uuid
 import shutil
@@ -233,7 +233,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
     clean_title = remove_html_tags(title)
     
     # Remove HTML tags from content before creating lexical content
-    clean_content = content.replace('<p>', '').replace('</p>', '\n')
+    clean_content = humanize_content(content)
     lexical_content = create_lexical_content(clean_content, video_url, post_url)
 
     headers = {

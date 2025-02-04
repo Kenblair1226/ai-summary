@@ -38,13 +38,6 @@ system_prompt = """
     根據使用者專業程度調整內容深度
     在保持專業的同時確保易懂性
     適時補充基礎知識說明
-
-
-    輸出格式
-    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
-    主題概述：簡要說明討論主題
-    核心分析：詳細的分析內容
-    討論要點：提出值得進一步探討的問題
 """
 
 # Create the model
@@ -70,6 +63,11 @@ def summarize_text(title, content):
     針對字幕內容撰寫一篇簡短文章摘要,需包含以下內容：
     第一行請綜合上述標題與內容發想一個適合的標題,以繁體中文輸出,以 \n 結尾
     第二行以後為摘要內容,文章內容只需包含對話內容的摘要,不需包含詳細討論
+
+    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
+    主題概述：簡要說明討論主題
+    核心分析：詳細的分析內容
+    討論要點：提出值得進一步探討的問題
     """)
     response_lines = response.text.split('\n')
     title = response_lines[0]
@@ -82,6 +80,11 @@ def generate_article(content):
     字幕：{content}
     針對字幕內容撰寫一篇詳細分析討論,需包含以下內容：
     文章內容只需包含細節討論,盡量詳細呈現對話內容,如有實例須包含在文章中
+
+    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
+    主題概述：簡要說明討論主題
+    核心分析：詳細的分析內容
+    討論要點：提出值得進一步探討的問題
     """)
 
     return response.text
@@ -93,6 +96,11 @@ def summarize_mp3(path):
     第一行請以內容為主發想一個適合且幽默的標題,以 \n 結尾
     第二行以後為摘要內容,文章內容只需包含對話內容的摘要,不需包含詳細討論
     如果有不同主題可分段落呈現
+
+    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
+    主題概述：簡要說明討論主題
+    核心分析：詳細的分析內容
+    討論要點：提出值得進一步探討的問題
     """
   myfile = genai.upload_file(path)
 
@@ -107,6 +115,11 @@ def article_mp3(title, path):
     如果內容很長，請先列出大綱，再進行詳細分析
     如果有不同主題可分段落呈現,使用html<p>tag語法,並在段落最前端放上副標題
     使用html語法並盡量讓文章美觀易讀
+
+    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
+    主題概述：簡要說明討論主題
+    核心分析：詳細的分析內容
+    討論要點：提出值得進一步探討的問題
     """
   myfile = genai.upload_file(path)
 
@@ -127,6 +140,11 @@ def summarize_article(title, content):
     第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
     如果有不同主題可分段落呈現,使用html<p>tag語法,並在段落最前端放上副標題
     使用html語法並盡量讓文章美觀易讀
+
+    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
+    主題概述：簡要說明討論主題
+    核心分析：詳細的分析內容
+    討論要點：提出值得進一步探討的問題
     """)
     
     response_lines = response.text.split('\n')
@@ -160,6 +178,25 @@ def generate_slug(title, content):
     slug = ''.join(c if c.isalnum() or c == '-' else '' for c in slug)
     slug = slug[:50].rstrip('-')
     return slug
+
+def humanize_content(content):
+    """Make the content more natural and conversational"""
+    response = model.generate_content(f"""
+    Content: {content}
+    
+    Rewrite this content to make it more natural and conversational. Requirements:
+    - Use a casual, friendly tone like a tech journalist writing for their blog
+    - Add transitional phrases and natural flow
+    - Remove any stiff or formal language
+    - Remove any HTML tags
+    - Keep the key information and examples
+    - Make it feel like it was written by a human, not AI
+    - Keep it in Traditional Chinese
+    
+    Return only the rewritten content, no other text.
+    """)
+    
+    return response.text.strip()
 
 if __name__ == "__main__":
     # path = "allin.mp3"
