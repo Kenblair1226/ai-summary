@@ -8,6 +8,7 @@ from genai_helper import article_mp3, generate_slug
 from youtube_helper import download_audio_from_youtube
 import uuid
 import shutil
+import json
 
 load_dotenv()
 
@@ -103,37 +104,46 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
     
     if video_url is not None:
         # Add video embed to content
-        content = f"""
-        <iframe width="560" height="315" src="{video_url.replace('youtu.be/', 'youtube.com/embed/')}" 
-        frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; 
-        gyroscope; picture-in-picture" allowfullscreen></iframe>
+        formatted_content = f"""
+<div class="kg-card kg-embed-card">
+    <iframe width="560" height="315" 
+            src="https://www.youtube.com/embed/{video_url.split('/')[-1]}" 
+            frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowfullscreen>
+    </iframe>
+</div>
 
-        {content}
+{content}
 
-        <p>原始影片：<a href="{video_url}">{video_url}</a></p>
-        """
+<p>原始影片：<a href="{video_url}">{video_url}</a></p>"""
     else:
-        content = f'{content}\n\n<p>原始連結：<a href="{post_url}">{post_url}</a></p>'
+        formatted_content = f'{content}\n\n<p>原始連結：<a href="{post_url}">{post_url}</a></p>'
 
     headers = {
         'Authorization': f'Ghost {token}',
         'Content-Type': 'application/json'
     }
 
+    # Remove HTML tags from the title
+    clean_title = ''.join(c for c in title if c.isalnum() or c.isspace())
+
     data = {
         "posts": [{
-            'title': title,
-            'html': content,
+            'title': clean_title,
+            'html': formatted_content,
+            'mobiledoc': json.dumps({
+                "version": "0.3.1",
+                "markups": [],
+                "atoms": [],
+                "cards": [["html", {"html": formatted_content}]],
+                "sections": [[10, 0]]
+            }),
             'status': 'published',
             'tags': tags,
             'visibility': 'public',
             'featured': False,
-            'slug': generate_slug(title, content),
-            'excerpt': content[:300] + '...' if len(content) > 300 else content,
-            'metadata': {
-                'meta_title': title,
-                'meta_description': content[:155] + '...' if len(content) > 155 else content
-            }
+            'slug': generate_slug(clean_title, content)
         }]
     }
 
@@ -147,6 +157,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
             return response.json()['posts'][0]['url']
         else:
             print(f"Ghost API error: {response.status_code} - {response.text}")
+            print(f"Response content: {response.text}")
             return None
     except Exception as e:
         print(f"Failed to post to Ghost: {str(e)}")
