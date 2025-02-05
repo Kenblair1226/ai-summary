@@ -184,9 +184,8 @@ def humanize_content(content):
     response = model.generate_content(f"""
     Content: {content}
     
-    Rewrite this content to make it more natural and conversational. Requirements:
-    - Use a casual, friendly tone like a tech journalist writing for their blog
-    - Add transitional phrases and natural flow
+    Rewrite this content to make it more natural. Requirements:
+    - Use a professional tone like a tech journalist writing for their blog
     - Remove any stiff or formal language
     - Remove any HTML tags
     - Keep the key information and examples
