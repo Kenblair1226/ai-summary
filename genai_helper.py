@@ -116,7 +116,8 @@ def article_mp3(title, path):
     如果有不同主題可分段落呈現,使用html<p>tag語法,並在段落最前端放上副標題
     使用html語法並盡量讓文章美觀易讀
 
-    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
+    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,相似內容整合成一段,
+    不要使用下列標題文字：
     主題概述：簡要說明討論主題
     核心分析：詳細的分析內容
     討論要點：提出值得進一步探討的問題
@@ -164,7 +165,7 @@ def generate_slug(title, content):
     - Maximum 50 characters
     - Make it SEO-friendly and readable
     - Capture the main topic
-    - Do not use special characters or spaces
+    - Do not use special characters or spaces or non-English words
     - Return only the slug, nothing else
     
     Example good slugs:
@@ -187,7 +188,7 @@ def humanize_content(content):
     Rewrite this content to make it more natural. Requirements:
     - Use a professional tone like a tech journalist writing for their blog
     - Remove any stiff or formal language
-    - Remove any HTML tags
+    - Remove any HTML tags and use markdown for formatting
     - Keep the key information and examples
     - Make it feel like it was written by a human, not AI
     - Keep it in Traditional Chinese
