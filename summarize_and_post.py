@@ -88,6 +88,60 @@ def extract_youtube_id(url):
             return match.group(1)
     return None
 
+def convert_markdown_to_lexical(text):
+    """Convert Markdown syntax to plain text with link information"""
+    # Convert Markdown links [text](url) to a tuple of (text, url)
+    link_pattern = r'\[(.*?)\]\((.*?)\)'
+    links = []
+    
+    def replace_link(match):
+        text, url = match.groups()
+        links.append((text, url))
+        return f"LINK_PLACEHOLDER_{len(links)-1}"
+    
+    # Replace links with placeholders first
+    processed_text = re.sub(link_pattern, replace_link, text)
+    
+    # Split into paragraphs
+    paragraphs = processed_text.split('\n')
+    result = []
+    
+    for para in paragraphs:
+        if not para.strip():
+            continue
+            
+        para_nodes = []
+        parts = para.split('LINK_PLACEHOLDER_')
+        
+        for i, part in enumerate(parts):
+            if part:
+                para_nodes.append({
+                    "type": "text",
+                    "text": part
+                })
+            
+            if i < len(parts) - 1 and i < len(links):
+                link_text, link_url = links[i]
+                para_nodes.append({
+                    "type": "link",
+                    "version": 1,
+                    "url": link_url,
+                    "rel": None,
+                    "target": None,
+                    "children": [{
+                        "type": "text",
+                        "text": link_text
+                    }]
+                })
+        
+        result.append({
+            "type": "paragraph",
+            "version": 1,
+            "children": para_nodes
+        })
+    
+    return result
+
 def create_lexical_content(content_html, video_url=None, post_url=None):
     nodes = []
     
@@ -114,18 +168,9 @@ def create_lexical_content(content_html, video_url=None, post_url=None):
                 "height": 113
             })
     
-    # Split content into paragraphs and add each as a node
-    paragraphs = content_html.split('\n')
-    for para in paragraphs:
-        if para.strip():  # Skip empty paragraphs
-            nodes.append({
-                "type": "paragraph",
-                "version": 1,
-                "children": [{
-                    "type": "text",
-                    "text": para.strip()
-                }]
-            })
+    # Convert content paragraphs with Markdown support
+    converted_nodes = convert_markdown_to_lexical(content_html)
+    nodes.extend(converted_nodes)
     
     # Add source link
     if video_url:
@@ -240,7 +285,10 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
         'Authorization': f'Ghost {token}',
         'Content-Type': 'application/json'
     }
-
+    slug = generate_slug(clean_title, content)
+    print(f"Clean Title: {clean_title}")
+    print(f"Content: {content}")
+    print(f"Slug: {slug}")
     data = {
         "posts": [{
             'title': clean_title,
@@ -249,7 +297,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
             'tags': tags,
             'visibility': 'public',
             'featured': False,
-            'slug': generate_slug(clean_title, content)
+            'slug': slug
         }]
     }
     try:
@@ -299,7 +347,7 @@ def get_ghost_posts():
 
     try:
         response = requests.get(
-            f"{ghost_url}/ghost/api/admin/posts/",
+            f"{ghost_url}/ghost/api/admin/posts/67a5992c36e1b300012a1f4a",
             headers=headers
         )
 
@@ -323,13 +371,13 @@ if __name__ == "__main__":
     # else:
     #     print("Failed to post summary to WordPress.")
     
-    # Post to Ghost
-    ghost_response = post_to_ghost("<p>test</p>", "test content", video_url, None, "https://youtube.com/@sharptechpodcast")
-    if ghost_response:
-        print(f"Summary posted to Ghost successfully. Post URL: {ghost_response}")
-    else:
-        print("Failed to post summary to Ghost.")
+    # # Post to Ghost
+    # ghost_response = post_to_ghost("<p>test</p>", "test content", video_url, None, "https://youtube.com/@sharptechpodcast")
+    # if ghost_response:
+    #     print(f"Summary posted to Ghost successfully. Post URL: {ghost_response}")
+    # else:
+    #     print("Failed to post summary to Ghost.")
     
-    # get_ghost_posts()
+    get_ghost_posts()
 
     # shutil.rmtree(path)
