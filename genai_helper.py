@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -178,6 +179,9 @@ def generate_slug(title, content):
     # Clean up any remaining invalid characters
     slug = ''.join(c if c.isalnum() or c == '-' else '' for c in slug)
     slug = slug[:50].rstrip('-')
+    # examine the slug with regex, if it contains non-characters nor hyphen, regenerate a new one
+    if not bool(re.fullmatch(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', slug)):
+        return generate_slug(title, content)
     return slug
 
 def humanize_content(content):
