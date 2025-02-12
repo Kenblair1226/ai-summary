@@ -114,7 +114,7 @@ def article_mp3(title, path):
     第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
     第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
     如果內容很長，請先列出大綱，再進行詳細分析
-    如果有不同主題可分段落呈現,使用html<p>tag語法,並在段落最前端放上副標題
+    如果有不同主題可分段落呈現,並在段落最前端放上副標題
     使用html語法並盡量讓文章美觀易讀
 
     對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,相似內容整合成一段,
@@ -140,7 +140,7 @@ def summarize_article(title, content):
     針對文章內容撰寫一篇詳細分析討論,需包含以下內容：
     第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
     第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
-    如果有不同主題可分段落呈現,使用html<p>tag語法,並在段落最前端放上副標題
+    如果有不同主題可分段落呈現,並在段落最前端放上副標題
     使用html語法並盡量讓文章美觀易讀
 
     對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,不要使用下列標題文字：
@@ -197,7 +197,7 @@ def humanize_content(content):
     - Make it feel like it was written by a human, not AI
     - Keep it in Traditional Chinese
     
-    Return only the rewritten content, no other text.
+    Return only the rewritten content, no other text. 不要添加改動說明句子
     """)
     
     return response.text.strip()
