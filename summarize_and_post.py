@@ -67,7 +67,7 @@ def post_to_wordpress(title, content, video_url, post_url, channel_url):
         "status": "publish",
         "categories": category_ids,
         "tags": [22], # 22:summary
-        "slug": generate_slug(title, content)
+        "slug": generate_slug(title)
     }
     
     response = requests.post(url, headers=headers, json=data)
@@ -114,7 +114,7 @@ def create_lexical_content(content_html, video_url=None, post_url=None):
 
     # Add main content as a single markdown block
     nodes.append({
-        "type": "markdown",
+        "type": "paragraph",
         "version": 1,
         "children": [{
             "type": "text",
@@ -206,32 +206,32 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
     if video_url:
         video_id = extract_youtube_id(video_url)
         if video_id:
-            iframe = f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
+            iframe = f'<!--kg-card-begin: html--><iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe><!--kg-card-end: html-->'
             content = f"{iframe}<br/><br/>{human_content}"
     
     # Add source link
     source_text = "原始影片：" if video_url else "原始連結："
     source_url = video_url if video_url else post_url
     if source_url:
-        content = f"{content}<br/><p>{source_text}<a href='{source_url}'>{source_url}</a></p>"
+        content = f"{content}<br/><br/>{source_text}<a href='{source_url}'>{source_url}</a>"
 
     headers = {
         'Authorization': f'Ghost {token}',
         'Content-Type': 'application/json'
     }
-
+    lexical_content = create_lexical_content(human_content, video_url, post_url)
     data = {
         "posts": [{
             'title': clean_title,
-            'html': content,
+            'lexical': json.dumps(lexical_content),
             'status': 'draft',
             'tags': tags,
             'visibility': 'public',
             'featured': False,
-            'slug': generate_slug(clean_title, content)
+            'slug': generate_slug(clean_title)
         }]
     }
-    
+    print(f"data: {data}")
     try:
         response = requests.post(
             f"{ghost_url}/ghost/api/admin/posts/", 
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     #     print("Failed to post summary to WordPress.")
     
     # Post to Ghost
-    ghost_response = post_to_ghost("<p>test</p>", "### test title  \n test content", video_url, None, "https://youtube.com/@sharptechpodcast")
+    ghost_response = post_to_ghost("<p>test</p>", "<p>test title</p>  \n test content", video_url, None, "https://youtube.com/@sharptechpodcast")
     if ghost_response:
         print(f"Summary posted to Ghost successfully. Post URL: {ghost_response}")
     else:

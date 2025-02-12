@@ -155,14 +155,13 @@ def summarize_article(title, content):
     
     return title, content
 
-def generate_slug(title, content, count = 0):
+def generate_slug(title, count = 0):
     """Generate a WordPress-friendly slug using Gemini"""
     response = model.generate_content(f"""
     Title: {title}
-    Content: {content}
     
     Generate a short URL-friendly slug for this article that meets these requirements:
-    - Use only lowercase English letters, numbers, and hyphens
+    - Use only lowercase English letters, numbers, and hyphens, do not use Chinese characters
     - Maximum 50 characters
     - Make it SEO-friendly and readable
     - Capture the main topic
@@ -183,7 +182,7 @@ def generate_slug(title, content, count = 0):
     if not bool(re.fullmatch(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', slug)) and count < 5:
         count += 1
         print(f"Regenerating slug: {slug}, count: {count}")
-        return generate_slug(title, content, count)
+        return generate_slug(title, count)
     return slug
 
 def humanize_content(content):
