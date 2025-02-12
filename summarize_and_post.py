@@ -88,132 +88,57 @@ def extract_youtube_id(url):
             return match.group(1)
     return None
 
-def convert_markdown_to_lexical(text):
-    """Convert Markdown syntax to plain text with link information"""
-    # Convert Markdown links [text](url) to a tuple of (text, url)
-    link_pattern = r'\[(.*?)\]\((.*?)\)'
-    links = []
-    
-    def replace_link(match):
-        text, url = match.groups()
-        links.append((text, url))
-        return f"LINK_PLACEHOLDER_{len(links)-1}"
-    
-    # Replace links with placeholders first
-    processed_text = re.sub(link_pattern, replace_link, text)
-    
-    # Split into paragraphs
-    paragraphs = processed_text.split('\n')
-    result = []
-    
-    for para in paragraphs:
-        if not para.strip():
-            continue
-            
-        para_nodes = []
-        parts = para.split('LINK_PLACEHOLDER_')
-        
-        for i, part in enumerate(parts):
-            if part:
-                para_nodes.append({
-                    "type": "text",
-                    "text": part
-                })
-            
-            if i < len(parts) - 1 and i < len(links):
-                link_text, link_url = links[i]
-                para_nodes.append({
-                    "type": "link",
-                    "version": 1,
-                    "url": link_url,
-                    "rel": None,
-                    "target": None,
-                    "children": [{
-                        "type": "text",
-                        "text": link_text
-                    }]
-                })
-        
-        result.append({
-            "type": "paragraph",
-            "version": 1,
-            "children": para_nodes
-        })
-    
-    return result
-
 def create_lexical_content(content_html, video_url=None, post_url=None):
     nodes = []
     
     if video_url:
-        # Add video embed as iframe
         video_id = extract_youtube_id(video_url)
         if video_id:
-            nodes.append({
-                "type": "paragraph",
-                "version": 1,
-                "children": [{
-                    "type": "text",
-                    "text": ""
-                }]
-            })
-            nodes.append({
-                "type": "embed",
-                "version": 1,
-                "embedType": "video",
-                "url": f"https://www.youtube.com/embed/{video_id}",
-                "html": f"<iframe width=\"200\" height=\"113\" src=\"https://www.youtube.com/embed/{video_id}?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen ></iframe>",
-                "caption": "",
-                "width": 200,
-                "height": 113
-            })
-    
-    # Convert content paragraphs with Markdown support
-    converted_nodes = convert_markdown_to_lexical(content_html)
-    nodes.extend(converted_nodes)
+            nodes.extend([
+                {
+                    "type": "paragraph",
+                    "version": 1,
+                    "children": [{"type": "text", "text": ""}]
+                },
+                {
+                    "type": "embed",
+                    "version": 1,
+                    "embedType": "video",
+                    "url": f"https://www.youtube.com/embed/{video_id}",
+                    "html": f"<iframe width=\"200\" height=\"113\" src=\"https://www.youtube.com/embed/{video_id}?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>",
+                    "caption": "",
+                    "width": 200,
+                    "height": 113
+                }
+            ])
+
+    # Add main content as a single markdown block
+    nodes.append({
+        "type": "markdown",
+        "version": 1,
+        "children": [{
+            "type": "text",
+            "format": "",
+            "text": content_html
+        }]
+    })
     
     # Add source link
-    if video_url:
+    if video_url or post_url:
+        source_text = "原始影片：" if video_url else "原始連結："
+        source_url = video_url if video_url else post_url
         nodes.append({
             "type": "paragraph",
             "version": 1,
             "children": [
-                {
-                    "type": "text",
-                    "text": "原始影片："
-                },
+                {"type": "text", "text": source_text},
                 {
                     "type": "link",
                     "version": 1,
-                    "url": video_url,
+                    "url": source_url,
                     "rel": None,
                     "target": None,
-                    "children": [{
-                        "type": "text",
-                        "text": video_url
-                    }]
-                }
-            ]
-        })
-    elif post_url:
-        nodes.append({
-            "type": "paragraph",
-            "version": 1,
-            "children": [
-                {
-                    "type": "text",
-                    "text": "原始連結："
-                },
-                {
-                    "type": "link",
-                    "version": 1,
-                    "url": post_url,
-                    "rel": None,
-                    "target": None,
-                    "children": [{
-                        "type": "text",
-                        "text": post_url
-                    }]
+                    "children": [{"type": "text", "text": source_url}]
                 }
             ]
         })
@@ -276,30 +201,37 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
     
     # Remove HTML tags from the title
     clean_title = remove_html_tags(title)
+    human_content = humanize_content(content)
+    # Prepare the content with video embed if needed
+    if video_url:
+        video_id = extract_youtube_id(video_url)
+        if video_id:
+            iframe = f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
+            content = f"{iframe}<br/><br/>{human_content}"
     
-    # Remove HTML tags from content before creating lexical content
-    clean_content = humanize_content(content)
-    lexical_content = create_lexical_content(clean_content, video_url, post_url)
+    # Add source link
+    source_text = "原始影片：" if video_url else "原始連結："
+    source_url = video_url if video_url else post_url
+    if source_url:
+        content = f"{content}<br/><p>{source_text}<a href='{source_url}'>{source_url}</a></p>"
 
     headers = {
         'Authorization': f'Ghost {token}',
         'Content-Type': 'application/json'
     }
-    slug = generate_slug(clean_title, content)
-    print(f"Clean Title: {clean_title}")
-    print(f"Content: {content}")
-    print(f"Slug: {slug}")
+
     data = {
         "posts": [{
             'title': clean_title,
-            'lexical': json.dumps(lexical_content),
-            'status': 'published',
+            'html': content,
+            'status': 'draft',
             'tags': tags,
             'visibility': 'public',
             'featured': False,
-            'slug': slug
+            'slug': generate_slug(clean_title, content)
         }]
     }
+    
     try:
         response = requests.post(
             f"{ghost_url}/ghost/api/admin/posts/", 
@@ -371,13 +303,13 @@ if __name__ == "__main__":
     # else:
     #     print("Failed to post summary to WordPress.")
     
-    # # Post to Ghost
-    # ghost_response = post_to_ghost("<p>test</p>", "test content", video_url, None, "https://youtube.com/@sharptechpodcast")
-    # if ghost_response:
-    #     print(f"Summary posted to Ghost successfully. Post URL: {ghost_response}")
-    # else:
-    #     print("Failed to post summary to Ghost.")
+    # Post to Ghost
+    ghost_response = post_to_ghost("<p>test</p>", "### test title  \n test content", video_url, None, "https://youtube.com/@sharptechpodcast")
+    if ghost_response:
+        print(f"Summary posted to Ghost successfully. Post URL: {ghost_response}")
+    else:
+        print("Failed to post summary to Ghost.")
     
-    get_ghost_posts()
+    # get_ghost_posts()
 
     # shutil.rmtree(path)

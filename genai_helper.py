@@ -192,7 +192,6 @@ def humanize_content(content):
     Rewrite this content to make it more natural. Requirements:
     - Use a professional tone like a tech journalist writing for their blog
     - Remove any stiff or formal language
-    - Remove any HTML tags and use markdown for formatting
     - Keep the key information and examples
     - Make it feel like it was written by a human, not AI
     - Keep it in Traditional Chinese
