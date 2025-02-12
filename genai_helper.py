@@ -196,7 +196,7 @@ def humanize_content(content):
     - Make it feel like it was written by a human, not AI
     - Keep it in Traditional Chinese
     
-    Return only the rewritten content, no other text. 不要添加改動說明句子
+    Return only the rewritten content, no other text. 請直接提供修改後的文章內容，不要包含其他文字。
     """)
     
     return response.text.strip()
