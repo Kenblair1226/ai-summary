@@ -155,7 +155,7 @@ def summarize_article(title, content):
     
     return title, content
 
-def generate_slug(title, content):
+def generate_slug(title, content, count = 0):
     """Generate a WordPress-friendly slug using Gemini"""
     response = model.generate_content(f"""
     Title: {title}
@@ -180,8 +180,10 @@ def generate_slug(title, content):
     slug = ''.join(c if c.isalnum() or c == '-' else '' for c in slug)
     slug = slug[:50].rstrip('-')
     # examine the slug with regex, if it contains non-characters nor hyphen, regenerate a new one
-    if not bool(re.fullmatch(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', slug)):
-        return generate_slug(title, content)
+    if not bool(re.fullmatch(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', slug)) and count < 5:
+        count += 1
+        print(f"Regenerating slug: {slug}, count: {count}")
+        return generate_slug(title, content, count)
     return slug
 
 def humanize_content(content):
