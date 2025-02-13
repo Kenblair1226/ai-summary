@@ -224,7 +224,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
         "posts": [{
             'title': clean_title,
             'lexical': json.dumps(lexical_content),
-            'status': 'publish',
+            'status': 'published',
             'tags': tags,
             'visibility': 'public',
             'featured': False,
