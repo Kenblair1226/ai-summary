@@ -189,23 +189,49 @@ def generate_slug(title, count = 0):
         return generate_slug(title, count)
     return slug
 
+def format_html_content(content):
+    """Format content for Ghost CMS."""
+    import re
+    
+    # Convert URLs to clickable links
+    url_pattern = r'(https?://[^\s<]+)'
+    content = re.sub(url_pattern, r'<a href="\1" target="_blank">\1</a>', content)
+    
+    # Split content into paragraphs
+    paragraphs = re.split(r'\n\s*\n', content)
+    
+    # Process each paragraph
+    formatted_paragraphs = []
+    for para in paragraphs:
+        if para.strip():
+            # Convert single newlines to spaces within paragraphs
+            para = re.sub(r'\n', ' ', para)
+            # Remove any extra spaces
+            para = re.sub(r'\s+', ' ', para)
+            formatted_paragraphs.append(para.strip())
+    
+    # Join paragraphs with double newlines
+    return '\n\n'.join(formatted_paragraphs)
+
 def humanize_content(content):
-    """Make the content more natural and conversational"""
+    """Make the content more natural and conversational with proper HTML formatting"""
     response = model.generate_content(f"""
     Content: {content}
     
     Rewrite this content to make it more natural. Requirements:
     - Use a professional tone like a tech journalist writing for their blog
-    - Remove any stiff or formal language, but keep the main concepts.
+    - Remove any stiff or formal language, but keep the main concepts
     - Dive deeper into the topic and provide more context if possible
     - Keep the key information and examples
     - Make it feel like it was written by a human, not AI
     - Keep it in Traditional Chinese
-    
-    Return only the rewritten content, no other text. 請直接提供修改後的文章內容，不要包含其他文字。
+    - Keep any existing HTML tags like <h3> intact
+    - Return only the rewritten content, no other text
+    - 請直接提供修改後的文章內容，不要包含其他文字
     """)
     
-    return response.text.strip()
+    # Format the response with proper HTML
+    return format_html_content(response.text.strip())
 
 if __name__ == "__main__":
     # path = "allin.mp3"
