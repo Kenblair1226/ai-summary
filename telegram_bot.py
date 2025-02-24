@@ -180,7 +180,7 @@ async def yt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Post to WordPress
         response = post_to_ghost(post_title, article, video_url, None, "YouTube")
-        response = post_to_wordpress(post_title, article, video_url, None, "YouTube")
+        post_to_wordpress(post_title, article, video_url, None, "YouTube")
         
         if response:
             await update.message.reply_text(f"Summary posted: {response}")
