@@ -225,9 +225,18 @@ def humanize_content(content):
     - Keep the key information and examples
     - Make it feel like it was written by a human, not AI
     - Keep it in Traditional Chinese
-    - Keep any existing HTML tags like <h3> intact
     - Return only the rewritten content, no other text
-    - 請直接提供修改後的文章內容，不要包含其他文字
+    - Includes important quotes from speakers (use direct quotations with attribution)
+    - Supporting evidence, examples, and case studies mentioned
+    - Any specialized terminology or concepts explained
+    - Connections between different segments of the discussion
+    - Context for the topics discussed (historical background, relevant current events, etc.)
+    - Areas of agreement and disagreement between speakers
+    - Questions raised but not fully answered
+    - Recommended resources mentioned during the episode
+
+    Structure the digest with clear headings and sections for easy navigation. Maintain the tone and perspective of the original speakers while presenting the information accurately.
+
     """)
     
     # Format the response with proper HTML
