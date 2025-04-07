@@ -11,8 +11,8 @@ import requests
 from dotenv import load_dotenv
 import urllib.request
 from db_helper import DbHelper
-from youtube_helper import download_audio_from_youtube, check_new_videos
-from genai_helper import article_mp3, summarize_article
+from youtube_helper import check_new_videos, get_youtube_title
+from genai_helper import summarize_youtube_video, article_mp3, summarize_article
 from summarize_and_post import post_to_wordpress, post_to_ghost
 from telegram_bot import notify_subscribers, start_bot
 from email.utils import parsedate_to_datetime
@@ -26,42 +26,46 @@ db.initialize_db()
 async def process_new_videos():
     try:
         channels = db.get_channels()
-        
+
         for channel_url in channels:
             logging.info(f"Checking new videos for channel: {channel_url}")
-            new_video_ids = check_new_videos(channel_url, db)  # Pass db instead of conn
+            new_video_ids = check_new_videos(channel_url, db)
             if new_video_ids:
                 logging.info(f"Found {len(new_video_ids)} new videos.")
                 for video_id in new_video_ids:
                     video_url = f"https://youtu.be/{video_id}"
-                    path = f"{uuid.uuid4()}"
-                    for attempt in range(3):
-                        try:
-                            logging.info(f"Attempting to download audio from {video_url}. Attempt {attempt + 1}")
-                            title, new_file = download_audio_from_youtube(video_url, path)
-                            break
-                        except Exception as e:
-                            logging.error(f"Attempt {attempt + 1} failed: {e}")
-                            time.sleep(5)
-                    else:
-                        logging.error(f"Failed to download audio from {video_url} after 3 attempts.")
+
+                    # Get video title using helper
+                    logging.info(f"Fetching title for video: {video_url}")
+                    post_title = get_youtube_title(video_url)
+                    if not post_title:
+                        logging.error(f"Could not fetch title for {video_url}. Skipping.")
                         continue
-                    
-                    logging.info(f"Generating article for video: {video_url}")
-                    post_title, article = article_mp3(title, new_file)
-                    response = post_to_ghost(post_title, article, video_url, None, channel_url)
+
+                    # Generate summary using helper
+                    article = summarize_youtube_video(video_url)
+
+                    # Check if summarization failed
+                    if article is None:
+                         logging.error(f"Failed to generate summary for {video_url}. Skipping.")
+                         continue
+
+                    # logging.info(f"Generating article for video: {video_url}") # Removed
+                    # post_title, article = article_mp3(title, new_file) # Removed
+
+                    # Post the summary
+                    ghost_response_url = post_to_ghost(post_title, article, video_url, None, channel_url)
                     post_to_wordpress(post_title, article, video_url, None, channel_url)
-                    if response:
+
+                    if ghost_response_url:
                         logging.info(f"Summary posted to WordPress/Ghost successfully for video {video_url}.")
                         channel_handle = channel_url.split('/')[-1]
-                        await notify_subscribers(post_title, response, channel_handle)
+                        await notify_subscribers(post_title, ghost_response_url, channel_handle)
                     else:
                         logging.error(f"Failed to post summary to WordPress/Ghost for video {video_url}.")
-                    
-                    shutil.rmtree(path)
             else:
                 logging.info(f"No new videos found for channel: {channel_url}")
-        
+
         logging.info("Finished processing new videos.")
     except Exception as e:
         logging.error(f"Error processing videos: {e}")

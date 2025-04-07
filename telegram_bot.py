@@ -6,12 +6,15 @@ from db_helper import DbHelper
 import asyncio
 import logging
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import uuid
 import shutil
-from youtube_helper import download_audio_from_youtube
-from genai_helper import article_mp3
+from youtube_helper import check_new_videos, is_valid_youtube_url, extract_video_id, get_youtube_title
 from summarize_and_post import post_to_wordpress, post_to_ghost
+from genai_helper import summarize_youtube_video
+
+# Import Gemini related components from main.py
+# from main import video_model, types
 
 load_dotenv()
 db = DbHelper(os.getenv('DB_PATH', 'database.db'))
@@ -44,24 +47,6 @@ def extract_website_name(url):
         return domain.split('.')[0].capitalize()
     except:
         return None
-
-def is_valid_youtube_url(url):
-    """Check if URL is a valid YouTube video URL"""
-    youtube_patterns = [
-        r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/live\/)([a-zA-Z0-9_-]+)',
-    ]
-    return any(re.search(pattern, url) for pattern in youtube_patterns)
-
-def extract_video_id(url):
-    """Extract video ID from YouTube URL"""
-    patterns = [
-        r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/live\/)([a-zA-Z0-9_-]+)',
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1).split('?')[0]  # Remove query parameters
-    return None
 
 def is_podcast_feed(url):
     """Check if URL is likely a podcast feed by looking for common podcast indicators"""
@@ -170,28 +155,33 @@ async def yt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         video_id = extract_video_id(url)
         video_url = f"https://youtu.be/{video_id}"
-        path = f"{uuid.uuid4()}"
-        
-        # Download audio
-        title, new_file = download_audio_from_youtube(video_url, path)
-        
-        # Generate summary
-        post_title, article = article_mp3(title, new_file)
-        
-        # Post to WordPress
-        response = post_to_ghost(post_title, article, video_url, None, "YouTube")
+
+        # Get title using the helper from youtube_helper.py
+        post_title = get_youtube_title(video_url)
+        if not post_title:
+             await update.message.reply_text('Could not fetch video title. Please check the URL.')
+             return
+
+        # Generate summary using the function from genai_helper
+        article = summarize_youtube_video(video_url)
+
+        # Check if summarization failed
+        if article is None:
+            await update.message.reply_text('Failed to generate summary for the video. Please try again later.')
+            return
+
+        # Post to WordPress/Ghost
+        ghost_response_url = post_to_ghost(post_title, article, video_url, None, "YouTube")
         post_to_wordpress(post_title, article, video_url, None, "YouTube")
-        
-        if response:
-            await update.message.reply_text(f"Summary posted: {response}")
+
+        if ghost_response_url:
+            await update.message.reply_text(f"Summary posted: {ghost_response_url}")
         else:
-            await update.message.reply_text('Failed to post summary to WordPress.')
-        
-        # Cleanup
-        shutil.rmtree(path)
-        
+            # Provide a more generic message if Ghost posting fails but WP might succeed
+            await update.message.reply_text('Summary generation complete. Check WordPress/Ghost.')
+
     except Exception as e:
-        logging.error(f"Error processing YouTube video: {e}")
+        logging.error(f"Error processing YouTube video via bot: {e}")
         await update.message.reply_text('Failed to process the video. Please try again later.')
 
 async def notify_subscribers(post_title, post_url, category=None):

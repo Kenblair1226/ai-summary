@@ -1,10 +1,22 @@
 import json
 import os
+import re
+import logging
 from shutil import Error
 import subprocess
 from typing import Tuple
 from pytubefix import YouTube, Channel
 from db_helper import initialize_db, get_checked_video_ids, save_checked_video_ids, connect_db
+
+def get_youtube_title(video_url):
+    """Fetches the title of a YouTube video."""
+    try:
+        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
+        return yt.title
+    except Exception as e:
+        # Use logging for errors
+        logging.error(f"Error fetching title for {video_url}: {e}")
+        return None
 
 def download_audio_from_youtube(video_url, output_path):
     yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
@@ -57,6 +69,27 @@ def generate_youtube_token() -> dict:
     result = cmd("node scripts/youtube-token-generator.js")
     data = json.loads(result.stdout)
     return data
+
+def is_valid_youtube_url(url):
+    """Check if URL is a valid YouTube video URL"""
+    # Patterns for standard video URLs (watch?v=), shorts, and live streams
+    youtube_patterns = [
+        r'(?:https?://)?(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/|live/)|youtu\.be/)([a-zA-Z0-9_-]{11})'
+    ]
+    return any(re.match(pattern, url) for pattern in youtube_patterns)
+
+def extract_video_id(url):
+    """Extract video ID from YouTube URL"""
+    # Patterns matching is_valid_youtube_url patterns, capturing the ID
+    patterns = [
+        r'(?:https?://)?(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/|live/)|youtu\.be/)([a-zA-Z0-9_-]{11})'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            # Return the captured group (the video ID)
+            return match.group(1)
+    return None
 
 if __name__ == "__main__":
     video_url = "https://youtu.be/hBMoPUAeLnY"

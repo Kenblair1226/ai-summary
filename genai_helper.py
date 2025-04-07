@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -51,10 +52,70 @@ generation_config = {
 }
 
 model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash-exp",
+    model_name="gemini-2.5-pro-exp-03-25",
     generation_config=generation_config,
     system_instruction=[ system_prompt ],
 )
+
+# --- Model specifically for Video Tasks ---
+# Using 1.5 Flash as it's faster and cheaper for potentially long videos
+# Ensure this model is available and suitable for your use case.
+video_generation_config = {
+  "temperature": 1,
+  "top_p": 0.95,
+  "top_k": 64,
+  "max_output_tokens": 8192,
+  "response_mime_type": "text/plain",
+}
+video_model = genai.GenerativeModel(
+  model_name="gemini-2.5-pro-exp-03-25", # Match model from main.py initially
+  generation_config=video_generation_config,
+  # safety_settings= Adjust safety settings if needed
+)
+
+def summarize_youtube_video(video_url):
+    """Summarizes a YouTube video using the Gemini API.
+    
+    Limitations:
+    - Maximum 8 hours of YouTube video per day
+    - Only 1 video per request
+    - Only public videos (not private or unlisted) are supported
+    - Gemini Pro can handle up to 2 hours of video (2M context window)
+    - Gemini Flash can handle up to 1 hour of video (1M context window)
+    """
+    logging.info(f"Generating summary for video: {video_url} using Gemini API")
+    try:
+        # Prepare the prompt for Gemini
+        prompt = f"""
+針對影片內容撰寫一篇深度分析文章
+文章內容只需包含對話內容的摘要,不需包含詳細討論
+如果有不同主題可分段落呈現
+
+對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題
+不要使用下列標題文字：
+主題概述：簡要說明討論主題
+核心分析：詳細的分析內容
+討論要點：提出值得進一步探討的問題
+"""
+        # Create a contents array with the prompt and YouTube URL
+        # Format follows https://ai.google.dev/gemini-api/docs/vision?lang=python#youtube
+        response = video_model.generate_content(
+            contents=[
+                {"text": prompt},
+                {"file_data": {"file_uri": video_url}}
+            ]
+        )
+        
+        # Check if response was successful
+        if hasattr(response, 'text'):
+            logging.info(f"Successfully generated summary for {video_url}")
+            return response.text
+        else:
+            logging.warning(f"Response may be incomplete for {video_url}")
+            return str(response)
+    except Exception as e:
+        logging.error(f"Error generating summary for {video_url} using Gemini: {e}")
+        return None
 
 def summarize_text(title, content):
 
@@ -159,7 +220,7 @@ def summarize_article(title, content):
     
     return title, content
 
-def generate_slug(title, count = 0):
+def generate_slug(title, count=0):
     """Generate a WordPress-friendly slug using Gemini"""
     response = model.generate_content(f"""
     Title: {title}
@@ -242,10 +303,44 @@ def humanize_content(content):
     # Format the response with proper HTML
     return format_html_content(response.text.strip())
 
+def find_relevant_tags_with_llm(title, content, available_tags):
+    """Use Gemini to analyze content and suggest relevant tags from available options"""
+    # Extract tag names for prompt
+    tag_names = [tag['name'] for tag in available_tags if tag['name'].lower() != 'summary']
+    tag_list = ', '.join(tag_names)
+    
+    response = model.generate_content(f"""
+    Title: {title}
+    Content: {content}
+    Available tags: {tag_list}
+
+    Analyze the title and content, then suggest the most relevant tags from the available tags list.
+    Requirements:
+    - Only select tags that are truly relevant to the main topics discussed
+    - Focus on key themes and technologies mentioned
+    - Consider industry segments and companies discussed
+    - Do not suggest tags just because a word appears once
+    - Return only the relevant tag names separated by commas, nothing else
+    - If no tags are relevant, return "none"
+    """)
+    
+    suggested_tags = response.text.strip().lower()
+    if suggested_tags == "none":
+        return []
+        
+    # Convert suggested tags back to tag objects
+    relevant_tags = []
+    for tag_name in [t.strip() for t in suggested_tags.split(',')]:
+        matching_tags = [tag for tag in available_tags if tag['name'].lower() == tag_name]
+        if matching_tags:
+            relevant_tags.append({'name': matching_tags[0]['name']})
+            
+    return relevant_tags
+
 if __name__ == "__main__":
     # path = "allin.mp3"
-    # title, content = article_mp3('DOGE kills its first bill, Zuck vs OpenAI, Google’s AI comeback with bestie Aaron Levie', path)
+    # title, content = article_mp3('DOGE kills its first bill, Zuck vs OpenAI, Google's AI comeback with bestie Aaron Levie', path)
     # print(f"{title=}")
     # print(f"{content=}")
-    slug = generate_slug("科技界風雲變幻 聚合理論的黃昏 AI的黎明", "在這次的預覽中 Jeremy首先提到 Doug O'Lafflin在新的一年中發表了一個引人注目的觀點 認為“聚合理論的時代已經過去了”這一論斷的基礎在於測試時間計算和軟體業務邊際成本的出現 Doug的觀點認為 AI正在使技術再次變得昂貴 這與網際網路時代的思維方式背道而馳。他指出 超大規模企業的商業模式主要建立在邊際成本為零的基礎上 但這個時代即將結束 未來將更加複雜且運算密集")
+    slug = generate_slug("科技界風雲變幻 聚合理論的黃昏 AI的黎明", "在這次的預覽中 Jeremy首先提到 Doug O'Lafflin在新的一年中發表了一個引人注目的觀點 認為聚合理論的時代已經過去了這一論斷的基礎在於測試時間計算和軟體業務邊際成本的出現 Doug的觀點認為 AI正在使技術再次變得昂貴 這與網際網路時代的思維方式背道而馳。他指出 超大規模企業的商業模式主要建立在邊際成本為零的基礎上 但這個時代即將結束 未來將更加複雜且運算密集")
     print(f"{slug=}")

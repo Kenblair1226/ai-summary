@@ -4,7 +4,7 @@ import requests
 from base64 import b64encode
 import jwt
 import datetime
-from genai_helper import article_mp3, generate_slug, humanize_content
+from genai_helper import article_mp3, generate_slug, humanize_content, find_relevant_tags_with_llm
 from youtube_helper import download_audio_from_youtube
 import uuid
 import shutil
@@ -171,37 +171,81 @@ def remove_html_tags(text):
     clean_text = ' '.join(clean_text.split())
     return clean_text
 
-def post_to_ghost(title, content, video_url, post_url, channel_url):
-    ghost_url = os.getenv('ghost_url', 'https://ghost.neorex.xyz').rstrip('/')
+def get_ghost_token():
+    """Generate a Ghost Admin API token"""
     ghost_key = os.getenv('ghost_key')
-    
-    # Split the key into ID and SECRET
     [id, secret] = ghost_key.split(':')
     
-    # Create the token
     iat = int(datetime.datetime.now().timestamp())
+    header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
+    payload = {'iat': iat, 'exp': iat + 5 * 60, 'aud': '/admin/'}
     
-    header = {
-        'alg': 'HS256',
-        'typ': 'JWT',
-        'kid': id
+    return jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+
+def get_ghost_tags():
+    """Fetch all tags from Ghost"""
+    ghost_url = os.getenv('ghost_url', 'https://ghost.neorex.xyz').rstrip('/')
+    token = get_ghost_token()
+    
+    headers = {
+        'Authorization': f'Ghost {token}',
+        'Content-Type': 'application/json'
     }
     
-    payload = {
-        'iat': iat,
-        'exp': iat + 5 * 60,
-        'aud': '/admin/'
-    }
+    try:
+        response = requests.get(
+            f"{ghost_url}/ghost/api/admin/tags/?limit=all",
+            headers=headers
+        )
+        if response.status_code == 200:
+            return response.json().get('tags', [])
+        else:
+            print(f"Failed to fetch tags: {response.status_code} - {response.text}")
+            return []
+    except Exception as e:
+        print(f"Error fetching tags: {str(e)}")
+        return []
 
-    token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+def find_relevant_tags(title, content, available_tags):
+    """Find relevant tags based on content and title"""
+    # Remove HTML tags and convert to lowercase for better matching
+    clean_title = remove_html_tags(title).lower()
+    clean_content = remove_html_tags(content).lower()
+    combined_text = f"{clean_title} {clean_content}"
+    
+    relevant_tags = []
+    
+    # Exclude 'summary' tag from matching as it's added by default
+    content_tags = [tag for tag in available_tags if tag['name'].lower() != 'summary']
+    
+    for tag in content_tags:
+        tag_name = tag['name'].lower()
+        # Check if tag name appears in title or content
+        # Add more sophisticated matching logic here if needed
+        if tag_name in combined_text:
+            relevant_tags.append({'name': tag['name']})
+    
+    return relevant_tags
 
-    # Get channel handle for tags
+def post_to_ghost(title, content, video_url, post_url, channel_url):
+    ghost_url = os.getenv('ghost_url', 'https://ghost.neorex.xyz').rstrip('/')
+    token = get_ghost_token()
+    
+    # Get channel handle for channel tag
     channel_handle = extract_channel_handle(channel_url)
-    tags = [{'name': 'summary'}, {'name': channel_handle}] if channel_handle else [{'name': 'summary'}]
+    channel_tag = [{'name': channel_handle}] if channel_handle else []
     
+    # Get available tags and find relevant ones using LLM
+    available_tags = get_ghost_tags()
+    content_tags = find_relevant_tags_with_llm(title, content, available_tags)
+    
+    # Combine tags: always include 'summary' tag, channel tag if exists, and any relevant content tags
+    tags = [{'name': 'summary'}] + channel_tag + content_tags
+
     # Remove HTML tags from the title
     clean_title = remove_html_tags(title)
     human_content = humanize_content(content)
+    
     # Prepare the content with video embed if needed
     if video_url:
         video_id = extract_youtube_id(video_url)
@@ -219,6 +263,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
         'Authorization': f'Ghost {token}',
         'Content-Type': 'application/json'
     }
+    
     lexical_content = create_lexical_content(human_content, video_url, post_url)
     data = {
         "posts": [{
@@ -250,27 +295,7 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
 
 def get_ghost_posts():
     ghost_url = os.getenv('ghost_url', 'https://ghost.neorex.xyz').rstrip('/')
-    ghost_key = os.getenv('ghost_key')
-    
-    # Split the key into ID and SECRET
-    [id, secret] = ghost_key.split(':')
-    
-    # Create the token
-    iat = int(datetime.datetime.now().timestamp())
-    
-    header = {
-        'alg': 'HS256',
-        'typ': 'JWT',
-        'kid': id
-    }
-    
-    payload = {
-        'iat': iat,
-        'exp': iat + 5 * 60,
-        'aud': '/admin/'
-    }
-
-    token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+    token = get_ghost_token()
 
     headers = {
         'Authorization': f'Ghost {token}',
