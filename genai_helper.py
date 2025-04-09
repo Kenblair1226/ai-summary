@@ -1,12 +1,6 @@
-import os
 import re
 import logging
-from dotenv import load_dotenv
-import google.generativeai as genai
-
-load_dotenv()
-
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+from llm_provider import llm_service, LLMResponse
 
 system_prompt = """
   你是一個專業的科技趨勢分析助手,專門協助使用者分析和討論科技相關話題。請依照以下指示進行回應：
@@ -51,30 +45,16 @@ generation_config = {
     "response_mime_type": "text/plain",
 }
 
-model = genai.GenerativeModel(
-    model_name="gemini-2.5-pro-exp-03-25",
-    generation_config=generation_config,
-    system_instruction=[ system_prompt ],
-)
+# The model configuration is now handled by the LLM service
+# Configuration is loaded from environment variables
 
 # --- Model specifically for Video Tasks ---
 # Using 1.5 Flash as it's faster and cheaper for potentially long videos
 # Ensure this model is available and suitable for your use case.
-video_generation_config = {
-  "temperature": 1,
-  "top_p": 0.95,
-  "top_k": 64,
-  "max_output_tokens": 8192,
-  "response_mime_type": "text/plain",
-}
-video_model = genai.GenerativeModel(
-  model_name="gemini-2.5-pro-exp-03-25", # Match model from main.py initially
-  generation_config=video_generation_config,
-  # safety_settings= Adjust safety settings if needed
-)
+# Video model configuration is now handled by the LLM service
 
-def summarize_youtube_video(video_url):
-    """Summarizes a YouTube video using the Gemini API.
+def summarize_youtube_video(video_url, provider=None):
+    """Summarizes a YouTube video using the configured LLM provider.
     
     Limitations:
     - Maximum 8 hours of YouTube video per day
@@ -82,10 +62,17 @@ def summarize_youtube_video(video_url):
     - Only public videos (not private or unlisted) are supported
     - Gemini Pro can handle up to 2 hours of video (2M context window)
     - Gemini Flash can handle up to 1 hour of video (1M context window)
+    
+    Args:
+        video_url: URL of the YouTube video to summarize
+        provider: Optional provider to use (default: None, uses configured default)
+    
+    Returns:
+        String containing the summary or None if there was an error
     """
-    logging.info(f"Generating summary for video: {video_url} using Gemini API")
+    logging.info(f"Generating summary for video: {video_url} using LLM provider")
     try:
-        # Prepare the prompt for Gemini
+        # Prepare the prompt
         prompt = f"""
 針對影片內容撰寫一篇深度分析文章
 文章內容只需包含對話內容的摘要,不需包含詳細討論
@@ -97,158 +84,236 @@ def summarize_youtube_video(video_url):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        # Create a contents array with the prompt and YouTube URL
-        # Format follows https://ai.google.dev/gemini-api/docs/vision?lang=python#youtube
-        response = video_model.generate_content(
-            contents=[
+        # Format follows Gemini format, handled by GeminiProvider
+        response = llm_service.generate_content(
+            prompt=[
                 {"text": prompt},
                 {"file_data": {"file_uri": video_url}}
-            ]
+            ],
+            provider=provider
         )
         
-        # Check if response was successful
-        if hasattr(response, 'text'):
-            logging.info(f"Successfully generated summary for {video_url}")
-            return response.text
-        else:
-            logging.warning(f"Response may be incomplete for {video_url}")
-            return str(response)
+        logging.info(f"Successfully generated summary for {video_url}")
+        return response.text
+        
     except Exception as e:
-        logging.error(f"Error generating summary for {video_url} using Gemini: {e}")
+        logging.error(f"Error generating summary for {video_url}: {e}")
         return None
 
-def summarize_text(title, content):
-
-    response = model.generate_content(f"""
-    標題：{title}
-    字幕：{content}
-    針對字幕內容撰寫一篇簡短文章摘要,需包含以下內容：
-    第一行請綜合上述標題與內容發想一個適合的標題,以繁體中文輸出,以 \n 結尾
-    第二行以後為摘要內容,文章內容只需包含對話內容的摘要,不需包含詳細討論
-
-    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
-    不要使用下列標題文字：
-    主題概述：簡要說明討論主題
-    核心分析：詳細的分析內容
-    討論要點：提出值得進一步探討的問題
-    """)
-    response_lines = response.text.split('\n')
-    title = response_lines[0]
-    content = '\n'.join(response_lines[1:])
-    return title, content
-
-def generate_article(content):
-
-    response = model.generate_content(f"""
-    字幕：{content}
-    針對字幕內容撰寫一篇詳細分析討論,需包含以下內容：
-    文章內容只需包含細節討論,盡量詳細呈現對話內容,如有實例須包含在文章中
-
-    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
-    不要使用下列標題文字：
-    主題概述：簡要說明討論主題
-    核心分析：詳細的分析內容
-    討論要點：提出值得進一步探討的問題
-    """)
-
-    return response.text
-
-
-def summarize_mp3(path):
-  prompt = f"""
-    針對音檔內容撰寫一篇簡短文章摘要,需包含以下內容：
-    第一行請以內容為主發想一個適合且幽默的標題,以 \n 結尾
-    第二行以後為摘要內容,文章內容只需包含對話內容的摘要,不需包含詳細討論
-    如果有不同主題可分段落呈現
-
-    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
-    不要使用下列標題文字：
-    主題概述：簡要說明討論主題
-    核心分析：詳細的分析內容
-    討論要點：提出值得進一步探討的問題
+def summarize_text(title, content, provider=None):
+    """Summarizes text content with a title using the configured LLM provider.
+    
+    Args:
+        title: Title of the content
+        content: Text content to summarize
+        provider: Optional provider to use (default: None, uses configured default)
+    
+    Returns:
+        Tuple containing (title, summary_content)
     """
-  myfile = genai.upload_file(path)
+    try:
+        prompt = f"""
+標題：{title}
+字幕：{content}
+針對字幕內容撰寫一篇簡短文章摘要,需包含以下內容：
+第一行請綜合上述標題與內容發想一個適合的標題,以繁體中文輸出,以 \n 結尾
+第二行以後為摘要內容,文章內容只需包含對話內容的摘要,不需包含詳細討論
 
-  return model.generate_content([myfile, prompt])
-  
-def article_mp3(title, path):
-  prompt = f"""
-    標題：{title}
-    針對音檔內容撰寫一篇詳細分析討論,需包含以下內容：
-    第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
-    第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
-    如果內容很長，請先列出大綱，再進行詳細分析
-    如果有不同主題可分段落呈現,並在段落最前端放上副標題,使用h3標籤
-    使用html語法並盡量讓文章美觀易讀
+對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
+不要使用下列標題文字：
+主題概述：簡要說明討論主題
+核心分析：詳細的分析內容
+討論要點：提出值得進一步探討的問題
+"""
+        response = llm_service.generate_content(prompt, provider=provider)
+        response_lines = response.text.split('\n')
+        title = response_lines[0]
+        content = '\n'.join(response_lines[1:])
+        return title, content
+    except Exception as e:
+        logging.error(f"Error summarizing text: {e}")
+        raise
 
-    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
-    相似內容整合成一段,不要使用下列標題文字：
-    主題概述：簡要說明討論主題
-    核心分析：詳細的分析內容
-    討論要點：提出值得進一步探討的問題
+def generate_article(content, provider=None):
+    """Generates a detailed article based on content using the configured LLM provider.
+    
+    Args:
+        content: Text content to analyze
+        provider: Optional provider to use (default: None, uses configured default)
+    
+    Returns:
+        String containing the generated article
     """
-  myfile = genai.upload_file(path)
+    try:
+        prompt = f"""
+字幕：{content}
+針對字幕內容撰寫一篇詳細分析討論,需包含以下內容：
+文章內容只需包含細節討論,盡量詳細呈現對話內容,如有實例須包含在文章中
 
-  response = model.generate_content([myfile, prompt])
+對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
+不要使用下列標題文字：
+主題概述：簡要說明討論主題
+核心分析：詳細的分析內容
+討論要點：提出值得進一步探討的問題
+"""
+        response = llm_service.generate_content(prompt, provider=provider)
+        return response.text
+    except Exception as e:
+        logging.error(f"Error generating article: {e}")
+        raise
 
-  response_lines = response.text.split('\n')
-  title = response_lines[0]
-  content = '\n'.join(response_lines[1:])
 
-  return title, content
+def summarize_mp3(path, provider=None):
+    """Summarizes MP3 content using the configured LLM provider.
+    
+    Args:
+        path: Path to the MP3 file
+        provider: Optional provider to use (default: None, uses configured default)
+    
+    Returns:
+        LLMResponse object containing the summary
+    """
+    try:
+        prompt = f"""
+針對音檔內容撰寫一篇簡短文章摘要,需包含以下內容：
+第一行請以內容為主發想一個適合且幽默的標題,以 \n 結尾
+第二行以後為摘要內容,文章內容只需包含對話內容的摘要,不需包含詳細討論
+如果有不同主題可分段落呈現
+
+對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
+不要使用下列標題文字：
+主題概述：簡要說明討論主題
+核心分析：詳細的分析內容
+討論要點：提出值得進一步探討的問題
+"""
+        response = llm_service.generate_content_with_media(prompt, path, provider=provider)
+        return response
+    except Exception as e:
+        logging.error(f"Error summarizing MP3: {e}")
+        raise
   
-def summarize_article(title, content):
-    response = model.generate_content(f"""
-    標題：{title}
-    文章內容：{content}
-    針對文章內容撰寫一篇詳細分析討論,需包含以下內容：
-    第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
-    第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
-    如果有不同主題可分段落呈現,並在段落最前端放上副標題
-    使用html語法並盡量讓文章美觀易讀
+def article_mp3(title, path, provider=None):
+    """Generates an article from an MP3 file using the configured LLM provider.
+    
+    Args:
+        title: Title of the audio content
+        path: Path to the MP3 file
+        provider: Optional provider to use (default: None, uses configured default)
+    
+    Returns:
+        Tuple containing (title, article_content)
+    """
+    try:
+        prompt = f"""
+標題：{title}
+針對音檔內容撰寫一篇詳細分析討論,需包含以下內容：
+第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
+第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
+如果內容很長，請先列出大綱，再進行詳細分析
+如果有不同主題可分段落呈現,並在段落最前端放上副標題,使用h3標籤
+使用html語法並盡量讓文章美觀易讀
 
-    對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
-    不要使用下列標題文字：
-    主題概述：簡要說明討論主題
-    核心分析：詳細的分析內容
-    討論要點：提出值得進一步探討的問題
-    """)
+對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
+相似內容整合成一段,不要使用下列標題文字：
+主題概述：簡要說明討論主題
+核心分析：詳細的分析內容
+討論要點：提出值得進一步探討的問題
+"""
+        response = llm_service.generate_content_with_media(prompt, path, provider=provider)
+        
+        response_lines = response.text.split('\n')
+        title = response_lines[0]
+        content = '\n'.join(response_lines[1:])
+        
+        return title, content
+    except Exception as e:
+        logging.error(f"Error generating article from MP3: {e}")
+        raise
+  
+def summarize_article(title, content, provider=None):
+    """Summarizes an article using the configured LLM provider.
     
-    response_lines = response.text.split('\n')
-    title = response_lines[0]
-    content = '\n'.join(response_lines[1:])
+    Args:
+        title: Title of the article
+        content: Content of the article
+        provider: Optional provider to use (default: None, uses configured default)
     
-    return title, content
+    Returns:
+        Tuple containing (title, summarized_content)
+    """
+    try:
+        prompt = f"""
+標題：{title}
+文章內容：{content}
+針對文章內容撰寫一篇詳細分析討論,需包含以下內容：
+第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
+第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
+如果有不同主題可分段落呈現,並在段落最前端放上副標題
+使用html語法並盡量讓文章美觀易讀
 
-def generate_slug(title, count=0):
-    """Generate a WordPress-friendly slug using Gemini"""
-    response = model.generate_content(f"""
-    Title: {title}
+對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
+不要使用下列標題文字：
+主題概述：簡要說明討論主題
+核心分析：詳細的分析內容
+討論要點：提出值得進一步探討的問題
+"""
+        response = llm_service.generate_content(prompt, provider=provider)
+        
+        response_lines = response.text.split('\n')
+        title = response_lines[0]
+        content = '\n'.join(response_lines[1:])
+        
+        return title, content
+    except Exception as e:
+        logging.error(f"Error summarizing article: {e}")
+        raise
+
+def generate_slug(title, count=0, provider=None):
+    """Generate a WordPress-friendly slug using the configured LLM provider.
     
-    Generate a short URL-friendly slug for this article that meets these requirements:
-    - Use only lowercase English letters, numbers, and hyphens, do not use Chinese characters
-    - Maximum 50 characters
-    - Make it SEO-friendly and readable
-    - Capture the main topic
-    - Do not use special characters or spaces or non-English words
-    - Return only the slug, nothing else
+    Args:
+        title: Title to generate slug from
+        count: Internal counter for recursion (default: 0)
+        provider: Optional provider to use (default: None, uses configured default)
     
-    Example good slugs:
-    "ai-transformation-tech-industry"
-    "apple-vision-pro-review"
-    "microsoft-q4-earnings-report"
-    """)
-    
-    slug = response.text.strip().lower()
-    # Clean up any remaining invalid characters
-    slug = ''.join(c if c.isalnum() or c == '-' else '' for c in slug)
-    slug = slug[:50].rstrip('-')
-    # examine the slug with regex, if it contains non-characters nor hyphen, regenerate a new one
-    if not bool(re.fullmatch(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', slug)) and count < 5:
-        count += 1
-        print(f"Regenerating slug: {slug}, count: {count}")
-        return generate_slug(title, count)
-    return slug
+    Returns:
+        String containing the generated slug
+    """
+    try:
+        prompt = f"""
+Title: {title}
+
+Generate a short URL-friendly slug for this article that meets these requirements:
+- Use only lowercase English letters, numbers, and hyphens, do not use Chinese characters
+- Maximum 50 characters
+- Make it SEO-friendly and readable
+- Capture the main topic
+- Do not use special characters or spaces or non-English words
+- Return only the slug, nothing else
+
+Example good slugs:
+"ai-transformation-tech-industry"
+"apple-vision-pro-review"
+"microsoft-q4-earnings-report"
+"""
+        response = llm_service.generate_content(prompt, provider=provider)
+        
+        slug = response.text.strip().lower()
+        # Clean up any remaining invalid characters
+        slug = ''.join(c if c.isalnum() or c == '-' else '' for c in slug)
+        slug = slug[:50].rstrip('-')
+        # examine the slug with regex, if it contains non-characters nor hyphen, regenerate a new one
+        if not bool(re.fullmatch(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', slug)) and count < 5:
+            count += 1
+            print(f"Regenerating slug: {slug}, count: {count}")
+            return generate_slug(title, count, provider)
+        return slug
+    except Exception as e:
+        logging.error(f"Error generating slug: {e}")
+        # Fallback to a basic slug in case of failure
+        if count >= 5:
+            return ''.join(c if c.isalnum() or c == '-' else '-' for c in title[:30].lower())
+        raise
 
 def format_html_content(content):
     """Format content for Ghost CMS."""
@@ -274,68 +339,95 @@ def format_html_content(content):
     # Join paragraphs with double newlines
     return '\n\n'.join(formatted_paragraphs)
 
-def humanize_content(content):
-    """Make the content more natural and conversational with proper HTML formatting"""
-    response = model.generate_content(f"""
-    Content: {content}
+def humanize_content(content, provider=None):
+    """Make the content more natural and conversational with proper HTML formatting.
     
-    Rewrite this content to make it more natural. Requirements:
-    - Use a professional tone like a tech journalist writing for their blog
-    - Remove any stiff or formal language, but keep the main concepts
-    - Dive deeper into the topic and provide more context if possible
-    - Keep the key information and examples
-    - Make it feel like it was written by a human, not AI
-    - Keep it in Traditional Chinese
-    - Return only the rewritten content, no other text
-    - Includes important quotes from speakers (use direct quotations with attribution)
-    - Supporting evidence, examples, and case studies mentioned
-    - Any specialized terminology or concepts explained
-    - Connections between different segments of the discussion
-    - Context for the topics discussed (historical background, relevant current events, etc.)
-    - Areas of agreement and disagreement between speakers
-    - Questions raised but not fully answered
-    - Recommended resources mentioned during the episode
-
-    Structure the digest with clear headings and sections for easy navigation. Maintain the tone and perspective of the original speakers while presenting the information accurately.
-
-    """)
+    Args:
+        content: Content to humanize
+        provider: Optional provider to use (default: None, uses configured default)
     
-    # Format the response with proper HTML
-    return format_html_content(response.text.strip())
+    Returns:
+        String containing the humanized content
+    """
+    try:
+        prompt = f"""
+Content: {content}
 
-def find_relevant_tags_with_llm(title, content, available_tags):
-    """Use Gemini to analyze content and suggest relevant tags from available options"""
-    # Extract tag names for prompt
-    tag_names = [tag['name'] for tag in available_tags if tag['name'].lower() != 'summary']
-    tag_list = ', '.join(tag_names)
-    
-    response = model.generate_content(f"""
-    Title: {title}
-    Content: {content}
-    Available tags: {tag_list}
+Rewrite this content to make it more natural. Requirements:
+- Use a professional tone like a tech journalist writing for their blog
+- Remove any stiff or formal language, but keep the main concepts
+- Dive deeper into the topic and provide more context if possible
+- Keep the key information and examples
+- Make it feel like it was written by a human, not AI
+- Keep it in Traditional Chinese
+- Return only the rewritten content, no other text
+- Includes important quotes from speakers (use direct quotations with attribution)
+- Supporting evidence, examples, and case studies mentioned
+- Any specialized terminology or concepts explained
+- Connections between different segments of the discussion
+- Context for the topics discussed (historical background, relevant current events, etc.)
+- Areas of agreement and disagreement between speakers
+- Questions raised but not fully answered
+- Recommended resources mentioned during the episode
 
-    Analyze the title and content, then suggest the most relevant tags from the available tags list.
-    Requirements:
-    - Only select tags that are truly relevant to the main topics discussed
-    - Focus on key themes and technologies mentioned
-    - Consider industry segments and companies discussed
-    - Do not suggest tags just because a word appears once
-    - Return only the relevant tag names separated by commas, nothing else
-    - If no tags are relevant, return "none"
-    """)
-    
-    suggested_tags = response.text.strip().lower()
-    if suggested_tags == "none":
-        return []
+Structure the digest with clear headings and sections for easy navigation. Maintain the tone and perspective of the original speakers while presenting the information accurately.
+"""
+        response = llm_service.generate_content(prompt, provider=provider)
         
-    # Convert suggested tags back to tag objects
-    relevant_tags = []
-    for tag_name in [t.strip() for t in suggested_tags.split(',')]:
-        matching_tags = [tag for tag in available_tags if tag['name'].lower() == tag_name]
-        if matching_tags:
-            relevant_tags.append({'name': matching_tags[0]['name']})
+        # Format the response with proper HTML
+        return format_html_content(response.text.strip())
+    except Exception as e:
+        logging.error(f"Error humanizing content: {e}")
+        return content  # Return original content on error
+
+def find_relevant_tags_with_llm(title, content, available_tags, provider=None):
+    """Use the configured LLM provider to analyze content and suggest relevant tags from available options.
+    
+    Args:
+        title: Title of the content
+        content: Content to analyze
+        available_tags: List of available tags
+        provider: Optional provider to use (default: None, uses configured default)
+    
+    Returns:
+        List of relevant tag objects
+    """
+    try:
+        # Extract tag names for prompt
+        tag_names = [tag['name'] for tag in available_tags if tag['name'].lower() != 'summary']
+        tag_list = ', '.join(tag_names)
+        
+        prompt = f"""
+Title: {title}
+Content: {content}
+Available tags: {tag_list}
+
+Analyze the title and content, then suggest the most relevant tags from the available tags list.
+Requirements:
+- Only select tags that are truly relevant to the main topics discussed
+- Focus on key themes and technologies mentioned
+- Consider industry segments and companies discussed
+- Do not suggest tags just because a word appears once
+- Return only the relevant tag names separated by commas, nothing else
+- If no tags are relevant, return "none"
+"""
+        response = llm_service.generate_content(prompt, provider=provider)
+        
+        suggested_tags = response.text.strip().lower()
+        if suggested_tags == "none":
+            return []
             
-    return relevant_tags
+        # Convert suggested tags back to tag objects
+        relevant_tags = []
+        for tag_name in [t.strip() for t in suggested_tags.split(',')]:
+            matching_tags = [tag for tag in available_tags if tag['name'].lower() == tag_name]
+            if matching_tags:
+                relevant_tags.append({'name': matching_tags[0]['name']})
+                
+        return relevant_tags
+    except Exception as e:
+        logging.error(f"Error finding relevant tags: {e}")
+        return []  # Return empty list on error
 
 if __name__ == "__main__":
     # path = "allin.mp3"

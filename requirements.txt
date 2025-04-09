@@ -1,5 +1,5 @@
 pytubefix
-openai
+openai>=1.0.0
 google-generativeai
 beautifulsoup4
 feedparser
