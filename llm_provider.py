@@ -76,11 +76,25 @@ class GeminiProvider(LLMProvider):
             if self.is_rate_limited(e):
                 logging.warning("Rate limit hit for Gemini")
             raise
-    
+
     def generate_content_with_media(self, prompt: str, media_file: str) -> LLMResponse:
         try:
-            file = genai.upload_file(media_file)
-            response = self.model.generate_content([file, prompt])
+            # Check if the media_file is a YouTube URL
+            if media_file.startswith(('http://', 'https://')) and ('youtube.com' in media_file or 'youtu.be' in media_file):
+                # For YouTube URLs, we can directly use the URL in the prompt
+                response = self.model.generate_content([
+                    {
+                        "file_data": {
+                            "file_uri": media_file
+                        }
+                    },
+                    prompt
+                ])
+            else:
+                # For local files, use the existing upload_file method
+                file = genai.upload_file(media_file)
+                response = self.model.generate_content([file, prompt])
+
             if hasattr(response, 'text'):
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
