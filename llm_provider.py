@@ -64,10 +64,65 @@ class GeminiProvider(LLMProvider):
             generation_config=self.generation_config,
             system_instruction=[self.system_prompt] if self.system_prompt else None
         )
+        # Set maximum input tokens (slightly below the limit to be safe)
+        self.max_input_tokens = 1000000  # 1M tokens
+    
+    def _chunk_content(self, content: Union[str, List, Dict]) -> List[Union[str, List, Dict]]:
+        """Split content into chunks that fit within token limits"""
+        if isinstance(content, str):
+            # Simple string splitting - in practice you might want to use a more sophisticated
+            # tokenizer, but this works for basic cases
+            words = content.split()
+            chunks = []
+            current_chunk = []
+            current_length = 0
+            
+            for word in words:
+                # Rough estimate: 1.3 tokens per word on average
+                word_tokens = len(word.split()) * 1.3
+                if current_length + word_tokens > self.max_input_tokens:
+                    chunks.append(" ".join(current_chunk))
+                    current_chunk = [word]
+                    current_length = word_tokens
+                else:
+                    current_chunk.append(word)
+                    current_length += word_tokens
+            
+            if current_chunk:
+                chunks.append(" ".join(current_chunk))
+            return chunks
+        elif isinstance(content, list):
+            # For lists, we'll process each item individually
+            return [self._chunk_content(item) for item in content]
+        elif isinstance(content, dict):
+            # For dicts, we'll process the text content
+            if 'text' in content:
+                return [{'text': chunk} for chunk in self._chunk_content(content['text'])]
+            return [content]
+        return [content]
     
     def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
         try:
-            response = self.model.generate_content(prompt)
+            # Check if we need to chunk the content
+            chunks = self._chunk_content(prompt)
+            
+            if len(chunks) == 1:
+                # If only one chunk, process normally
+                response = self.model.generate_content(chunks[0])
+            else:
+                # Process chunks and combine results
+                responses = []
+                for chunk in chunks:
+                    chunk_response = self.model.generate_content(chunk)
+                    if hasattr(chunk_response, 'text'):
+                        responses.append(chunk_response.text)
+                    else:
+                        responses.append(str(chunk_response))
+                
+                # Combine responses
+                combined_response = " ".join(responses)
+                return LLMResponse(combined_response, responses)
+            
             if hasattr(response, 'text'):
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
@@ -81,7 +136,10 @@ class GeminiProvider(LLMProvider):
         try:
             # Check if the media_file is a YouTube URL
             if media_file.startswith(('http://', 'https://')) and ('youtube.com' in media_file or 'youtu.be' in media_file):
-                # For YouTube URLs, we can directly use the URL in the prompt
+                logging.info(f"Processing YouTube URL: {media_file}")
+                logging.debug(f"Prompt for YouTube video: {prompt}")
+                # For YouTube URLs, we just pass the URL and prompt
+                # Gemini's API will handle the video processing
                 response = self.model.generate_content([
                     {
                         "file_data": {
@@ -90,12 +148,14 @@ class GeminiProvider(LLMProvider):
                     },
                     prompt
                 ])
+                logging.debug("Successfully sent request to Gemini for YouTube video processing")
             else:
                 # For local files, use the existing upload_file method
                 file = genai.upload_file(media_file)
                 response = self.model.generate_content([file, prompt])
 
             if hasattr(response, 'text'):
+                logging.debug(f"Received response from Gemini: {response.text[:200]}...")  # Log first 200 chars
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
         except Exception as e:
