@@ -11,7 +11,7 @@ import requests
 from dotenv import load_dotenv
 import urllib.request
 from db_helper import DbHelper
-from youtube_helper import check_new_videos, get_youtube_title
+from youtube_helper import check_new_videos, get_youtube_title, download_audio_from_youtube
 from genai_helper import summarize_youtube_video, article_mp3, summarize_article
 from summarize_and_post import post_to_wordpress, post_to_ghost
 from telegram_bot import notify_subscribers, start_bot
@@ -42,27 +42,40 @@ async def process_new_videos():
                         logging.error(f"Could not fetch title for {video_url}. Skipping.")
                         continue
 
-                    # Generate summary using helper
-                    article = summarize_youtube_video(video_url)
+                    # Create a temporary directory for the audio file
+                    temp_dir = f"temp_{uuid.uuid4()}"
+                    os.makedirs(temp_dir, exist_ok=True)
 
-                    # Check if summarization failed
-                    if article is None:
-                         logging.error(f"Failed to generate summary for {video_url}. Skipping.")
-                         continue
+                    try:
+                        # Download audio from YouTube
+                        logging.info(f"Downloading audio for video: {video_url}")
+                        title, mp3_path = download_audio_from_youtube(video_url, temp_dir)
 
-                    # logging.info(f"Generating article for video: {video_url}") # Removed
-                    # post_title, article = article_mp3(title, new_file) # Removed
+                        # Generate summary using article_mp3
+                        logging.info(f"Generating summary for audio: {mp3_path}")
+                        post_title, article = article_mp3(title, mp3_path)
 
-                    # Post the summary
-                    ghost_response_url = post_to_ghost(post_title, article, video_url, None, channel_url)
-                    post_to_wordpress(post_title, article, video_url, None, channel_url)
+                        # Check if summarization failed
+                        if article is None:
+                            logging.error(f"Failed to generate summary for {video_url}. Skipping.")
+                            continue
 
-                    if ghost_response_url:
-                        logging.info(f"Summary posted to WordPress/Ghost successfully for video {video_url}.")
-                        channel_handle = channel_url.split('/')[-1]
-                        await notify_subscribers(post_title, ghost_response_url, channel_handle)
-                    else:
-                        logging.error(f"Failed to post summary to WordPress/Ghost for video {video_url}.")
+                        # Post the summary
+                        ghost_response_url = post_to_ghost(post_title, article, video_url, None, channel_url)
+                        post_to_wordpress(post_title, article, video_url, None, channel_url)
+
+                        if ghost_response_url:
+                            logging.info(f"Summary posted to WordPress/Ghost successfully for video {video_url}.")
+                            channel_handle = channel_url.split('/')[-1]
+                            await notify_subscribers(post_title, ghost_response_url, channel_handle)
+                        else:
+                            logging.error(f"Failed to post summary to WordPress/Ghost for video {video_url}.")
+
+                    finally:
+                        # Clean up temporary directory
+                        if os.path.exists(temp_dir):
+                            shutil.rmtree(temp_dir)
+
             else:
                 logging.info(f"No new videos found for channel: {channel_url}")
 
