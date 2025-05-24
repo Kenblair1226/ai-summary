@@ -30,6 +30,11 @@ def download_audio_from_youtube(video_url, output_path):
     subprocess.run(['ffmpeg', '-i', audio_file, new_file])
     os.remove(audio_file)
     
+    # Log the size of the downloaded MP3 file
+    file_size = os.path.getsize(new_file)
+    size_mb = file_size / (1024 * 1024)  # Convert to MB
+    logging.info(f"Downloaded MP3 file size: {size_mb:.2f} MB ({file_size:,} bytes)")
+    
     return title, new_file
 
 def check_new_videos(channel_url, db):
