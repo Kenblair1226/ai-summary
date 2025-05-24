@@ -70,7 +70,7 @@ def summarize_youtube_video(video_url, provider=None):
     Returns:
         String containing the summary or None if there was an error
     """
-    logging.info(f"Generating summary for video: {video_url} using LLM provider")
+    logging.info(f"Generating summary for video: {video_url} using LLM provider: {provider or 'default'}")
     try:
         # Prepare the prompt
         prompt = f"""
@@ -112,6 +112,7 @@ def summarize_text(title, content, provider=None):
         Tuple containing (title, summary_content)
     """
     try:
+        logging.info(f"Generating text summary using LLM provider: {provider or 'default'}")
         prompt = f"""
 標題：{title}
 字幕：{content}
@@ -145,6 +146,7 @@ def generate_article(content, provider=None):
         String containing the generated article
     """
     try:
+        logging.info(f"Generating article using LLM provider: {provider or 'default'}")
         prompt = f"""
 字幕：{content}
 針對字幕內容撰寫一篇詳細分析討論,需包含以下內容：
@@ -174,6 +176,7 @@ def summarize_mp3(path, provider=None):
         LLMResponse object containing the summary
     """
     try:
+        logging.info(f"Generating MP3 summary using LLM provider: {provider or 'default'}")
         prompt = f"""
 針對音檔內容撰寫一篇簡短文章摘要,需包含以下內容：
 第一行請以內容為主發想一個適合且幽默的標題,以 \n 結尾
@@ -204,6 +207,7 @@ def article_mp3(title, path, provider=None):
         Tuple containing (title, article_content)
     """
     try:
+        logging.info(f"Generating article from MP3 using LLM provider: {provider or 'default'}")
         prompt = f"""
 標題：{title}
 針對音檔內容撰寫一篇詳細分析討論,需包含以下內容：
@@ -242,6 +246,7 @@ def summarize_article(title, content, provider=None):
         Tuple containing (title, summarized_content)
     """
     try:
+        logging.info(f"Generating article summary using LLM provider: {provider or 'default'}")
         prompt = f"""
 標題：{title}
 文章內容：{content}
@@ -280,6 +285,7 @@ def generate_slug(title, count=0, provider=None):
         String containing the generated slug
     """
     try:
+        logging.info(f"Generating slug using LLM provider: {provider or 'default'}")
         prompt = f"""
 Title: {title}
 
@@ -350,6 +356,7 @@ def humanize_content(content, provider=None):
         String containing the humanized content
     """
     try:
+        logging.info(f"Humanizing content using LLM provider: {provider or 'default'}")
         prompt = f"""
 Content: {content}
 
@@ -393,6 +400,7 @@ def find_relevant_tags_with_llm(title, content, available_tags, provider=None):
         List of relevant tag objects
     """
     try:
+        logging.info(f"Finding relevant tags using LLM provider: {provider or 'default'}")
         # Extract tag names for prompt
         tag_names = [tag['name'] for tag in available_tags if tag['name'].lower() != 'summary']
         tag_list = ', '.join(tag_names)
