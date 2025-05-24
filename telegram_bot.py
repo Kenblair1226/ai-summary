@@ -9,9 +9,9 @@ import re
 from urllib.parse import urlparse, parse_qs
 import uuid
 import shutil
-from youtube_helper import check_new_videos, is_valid_youtube_url, extract_video_id, get_youtube_title
+from youtube_helper import check_new_videos, is_valid_youtube_url, extract_video_id, get_youtube_title, download_audio_from_youtube
 from summarize_and_post import post_to_wordpress, post_to_ghost
-from genai_helper import summarize_youtube_video
+from genai_helper import summarize_youtube_video, article_mp3
 
 # Import Gemini related components from main.py
 # from main import video_model, types
@@ -162,23 +162,38 @@ async def yt(update: Update, context: ContextTypes.DEFAULT_TYPE):
              await update.message.reply_text('Could not fetch video title. Please check the URL.')
              return
 
-        # Generate summary using the function from genai_helper
-        article = summarize_youtube_video(video_url)
+        # Create a temporary directory for the audio file
+        temp_dir = f"temp_{uuid.uuid4()}"
+        os.makedirs(temp_dir, exist_ok=True)
 
-        # Check if summarization failed
-        if article is None:
-            await update.message.reply_text('Failed to generate summary for the video. Please try again later.')
-            return
+        try:
+            # Download audio from YouTube
+            logging.info(f"Downloading audio for video: {video_url}")
+            title, mp3_path = download_audio_from_youtube(video_url, temp_dir)
 
-        # Post to WordPress/Ghost
-        ghost_response_url = post_to_ghost(post_title, article, video_url, None, "YouTube")
-        post_to_wordpress(post_title, article, video_url, None, "YouTube")
+            # Generate summary using article_mp3
+            logging.info(f"Generating summary for audio: {mp3_path}")
+            post_title, article = article_mp3(title, mp3_path)
 
-        if ghost_response_url:
-            await update.message.reply_text(f"Summary posted: {ghost_response_url}")
-        else:
-            # Provide a more generic message if Ghost posting fails but WP might succeed
-            await update.message.reply_text('Summary generation complete. Check WordPress/Ghost.')
+            # Check if summarization failed
+            if article is None:
+                await update.message.reply_text('Failed to generate summary for the video. Please try again later.')
+                return
+
+            # Post to WordPress/Ghost
+            ghost_response_url = post_to_ghost(post_title, article, video_url, None, "YouTube")
+            post_to_wordpress(post_title, article, video_url, None, "YouTube")
+
+            if ghost_response_url:
+                await update.message.reply_text(f"Summary posted: {ghost_response_url}")
+            else:
+                # Provide a more generic message if Ghost posting fails but WP might succeed
+                await update.message.reply_text('Summary generation complete. Check WordPress/Ghost.')
+
+        finally:
+            # Clean up temporary directory
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
 
     except Exception as e:
         logging.error(f"Error processing YouTube video via bot: {e}")
