@@ -1,4 +1,4 @@
-pytubefix
+pytubefix>=9.0.0
 openai>=1.0.0
 google-generativeai
 beautifulsoup4
