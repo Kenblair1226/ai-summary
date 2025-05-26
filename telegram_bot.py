@@ -173,7 +173,7 @@ async def yt(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Generate summary using article_mp3
             logging.info(f"Generating summary for audio: {mp3_path}")
-            post_title, article = article_mp3(title, mp3_path)
+            post_title, article = article_mp3(title, mp3_path, force_gemini=True)
 
             # Check if summarization failed
             if article is None:

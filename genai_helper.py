@@ -53,26 +53,21 @@ generation_config = {
 # Ensure this model is available and suitable for your use case.
 # Video model configuration is now handled by the LLM service
 
-def summarize_youtube_video(video_url, provider=None):
+def summarize_youtube_video(video_url, provider=None, **kwargs):
     """Summarizes a YouTube video using the configured LLM provider.
-    
-    Limitations:
-    - Maximum 8 hours of YouTube video per day
-    - Only 1 video per request
-    - Only public videos (not private or unlisted) are supported
-    - Gemini Pro can handle up to 2 hours of video (2M context window)
-    - Gemini Flash can handle up to 1 hour of video (1M context window)
-    
+    If force_gemini=True is passed in kwargs, Gemini will be used explicitly (for Telegram bot).
+    Otherwise, OpenRouter is used as default, with fallback to Gemini on error.
     Args:
         video_url: URL of the YouTube video to summarize
-        provider: Optional provider to use (default: None, uses configured default)
-    
+        provider: Optional provider to use (default: None, uses OpenRouter unless overridden)
+        **kwargs: force_gemini (bool) to force Gemini provider
     Returns:
         String containing the summary or None if there was an error
     """
-    logging.info(f"Generating summary for video: {video_url} using LLM provider: {provider or 'default'}")
+    force_gemini = kwargs.pop('force_gemini', False)
+    chosen_provider = 'gemini' if force_gemini else (provider or 'openrouter')
     try:
-        # Prepare the prompt
+        logging.info(f"Generating summary for video: {video_url} using LLM provider: {chosen_provider}")
         prompt = f"""
 針對影片內容撰寫一篇深度分析文章
 文章內容只需包含對話內容的摘要,不需包含詳細討論
@@ -84,35 +79,36 @@ def summarize_youtube_video(video_url, provider=None):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        # Format follows Gemini format, handled by GeminiProvider
         response = llm_service.generate_content(
             prompt=[
                 {"text": prompt},
                 {"file_data": {"file_uri": video_url}}
             ],
-            provider=provider
+            provider=chosen_provider,
+            fallback=not force_gemini
         )
-        
         logging.info(f"Successfully generated summary for {video_url}")
         return response.text
-        
     except Exception as e:
         logging.error(f"Error generating summary for {video_url}: {e}")
         return None
 
-def summarize_text(title, content, provider=None):
+def summarize_text(title, content, provider=None, **kwargs):
     """Summarizes text content with a title using the configured LLM provider.
-    
+    If force_gemini=True is passed in kwargs, Gemini will be used explicitly (for Telegram bot).
+    Otherwise, OpenRouter is used as default, with fallback to Gemini on error.
     Args:
         title: Title of the content
         content: Text content to summarize
-        provider: Optional provider to use (default: None, uses configured default)
-    
+        provider: Optional provider to use (default: None, uses OpenRouter unless overridden)
+        **kwargs: force_gemini (bool) to force Gemini provider
     Returns:
         Tuple containing (title, summary_content)
     """
+    force_gemini = kwargs.pop('force_gemini', False)
+    chosen_provider = 'gemini' if force_gemini else (provider or 'openrouter')
     try:
-        logging.info(f"Generating text summary using LLM provider: {provider or 'default'}")
+        logging.info(f"Generating text summary using LLM provider: {chosen_provider}")
         prompt = f"""
 標題：{title}
 字幕：{content}
@@ -126,7 +122,7 @@ def summarize_text(title, content, provider=None):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content(prompt, provider=provider)
+        response = llm_service.generate_content(prompt, provider=chosen_provider, fallback=not force_gemini)
         response_lines = response.text.split('\n')
         title = response_lines[0]
         content = '\n'.join(response_lines[1:])
@@ -135,18 +131,21 @@ def summarize_text(title, content, provider=None):
         logging.error(f"Error summarizing text: {e}")
         raise
 
-def generate_article(content, provider=None):
+def generate_article(content, provider=None, **kwargs):
     """Generates a detailed article based on content using the configured LLM provider.
-    
+    If force_gemini=True is passed in kwargs, Gemini will be used explicitly (for Telegram bot).
+    Otherwise, OpenRouter is used as default, with fallback to Gemini on error.
     Args:
         content: Text content to analyze
-        provider: Optional provider to use (default: None, uses configured default)
-    
+        provider: Optional provider to use (default: None, uses OpenRouter unless overridden)
+        **kwargs: force_gemini (bool) to force Gemini provider
     Returns:
         String containing the generated article
     """
+    force_gemini = kwargs.pop('force_gemini', False)
+    chosen_provider = 'gemini' if force_gemini else (provider or 'openrouter')
     try:
-        logging.info(f"Generating article using LLM provider: {provider or 'default'}")
+        logging.info(f"Generating article using LLM provider: {chosen_provider}")
         prompt = f"""
 字幕：{content}
 針對字幕內容撰寫一篇詳細分析討論,需包含以下內容：
@@ -158,25 +157,28 @@ def generate_article(content, provider=None):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content(prompt, provider=provider)
+        response = llm_service.generate_content(prompt, provider=chosen_provider, fallback=not force_gemini)
         return response.text
     except Exception as e:
         logging.error(f"Error generating article: {e}")
         raise
 
 
-def summarize_mp3(path, provider=None):
+def summarize_mp3(path, provider=None, **kwargs):
     """Summarizes MP3 content using the configured LLM provider.
-    
+    If force_gemini=True is passed in kwargs, Gemini will be used explicitly (for Telegram bot).
+    Otherwise, OpenRouter is used as default, with fallback to Gemini on error.
     Args:
         path: Path to the MP3 file
-        provider: Optional provider to use (default: None, uses configured default)
-    
+        provider: Optional provider to use (default: None, uses OpenRouter unless overridden)
+        **kwargs: force_gemini (bool) to force Gemini provider
     Returns:
         LLMResponse object containing the summary
     """
+    force_gemini = kwargs.pop('force_gemini', False)
+    chosen_provider = 'gemini' if force_gemini else (provider or 'openrouter')
     try:
-        logging.info(f"Generating MP3 summary using LLM provider: {provider or 'default'}")
+        logging.info(f"Generating MP3 summary using LLM provider: {chosen_provider}")
         prompt = f"""
 針對音檔內容撰寫一篇簡短文章摘要,需包含以下內容：
 第一行請以內容為主發想一個適合且幽默的標題,以 \n 結尾
@@ -189,25 +191,28 @@ def summarize_mp3(path, provider=None):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content_with_media(prompt, path, provider=provider)
+        response = llm_service.generate_content_with_media(prompt, path, provider=chosen_provider, fallback=not force_gemini)
         return response
     except Exception as e:
         logging.error(f"Error summarizing MP3: {e}")
         raise
   
-def article_mp3(title, path, provider=None):
+def article_mp3(title, path, provider=None, **kwargs):
     """Generates an article from an MP3 file using the configured LLM provider.
-    
+    If force_gemini=True is passed in kwargs, Gemini will be used explicitly (for Telegram bot).
+    Otherwise, OpenRouter is used as default, with fallback to Gemini on error.
     Args:
         title: Title of the audio content
         path: Path to the MP3 file
-        provider: Optional provider to use (default: None, uses configured default)
-    
+        provider: Optional provider to use (default: None, uses OpenRouter unless overridden)
+        **kwargs: force_gemini (bool) to force Gemini provider
     Returns:
         Tuple containing (title, article_content)
     """
+    force_gemini = kwargs.pop('force_gemini', False)
+    chosen_provider = 'gemini' if force_gemini else (provider or 'openrouter')
     try:
-        logging.info(f"Generating article from MP3 using LLM provider: {provider or 'default'}")
+        logging.info(f"Generating article from MP3 using LLM provider: {chosen_provider}")
         prompt = f"""
 標題：{title}
 針對音檔內容撰寫一篇詳細分析討論,需包含以下內容：
@@ -223,30 +228,31 @@ def article_mp3(title, path, provider=None):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content_with_media(prompt, path, provider=provider)
-        
+        response = llm_service.generate_content_with_media(prompt, path, provider=chosen_provider, fallback=not force_gemini)
         response_lines = response.text.split('\n')
         title = response_lines[0]
         content = '\n'.join(response_lines[1:])
-        
         return title, content
     except Exception as e:
         logging.error(f"Error generating article from MP3: {e}")
         raise
   
-def summarize_article(title, content, provider=None):
+def summarize_article(title, content, provider=None, **kwargs):
     """Summarizes an article using the configured LLM provider.
-    
+    If force_gemini=True is passed in kwargs, Gemini will be used explicitly (for Telegram bot).
+    Otherwise, OpenRouter is used as default, with fallback to Gemini on error.
     Args:
         title: Title of the article
         content: Content of the article
-        provider: Optional provider to use (default: None, uses configured default)
-    
+        provider: Optional provider to use (default: None, uses OpenRouter unless overridden)
+        **kwargs: force_gemini (bool) to force Gemini provider
     Returns:
         Tuple containing (title, summarized_content)
     """
+    force_gemini = kwargs.pop('force_gemini', False)
+    chosen_provider = 'gemini' if force_gemini else (provider or 'openrouter')
     try:
-        logging.info(f"Generating article summary using LLM provider: {provider or 'default'}")
+        logging.info(f"Generating article summary using LLM provider: {chosen_provider}")
         prompt = f"""
 標題：{title}
 文章內容：{content}
@@ -262,12 +268,10 @@ def summarize_article(title, content, provider=None):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content(prompt, provider=provider)
-        
+        response = llm_service.generate_content(prompt, provider=chosen_provider, fallback=not force_gemini)
         response_lines = response.text.split('\n')
         title = response_lines[0]
         content = '\n'.join(response_lines[1:])
-        
         return title, content
     except Exception as e:
         logging.error(f"Error summarizing article: {e}")
