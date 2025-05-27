@@ -53,7 +53,7 @@ async def process_new_videos():
 
                         # Generate summary using article_mp3
                         logging.info(f"Generating summary for audio: {mp3_path}")
-                        post_title, article = article_mp3(title, mp3_path)
+                        post_title, article = article_mp3(title, mp3_path, provider='gemini')
 
                         # Check if summarization failed
                         if article is None:
@@ -112,7 +112,7 @@ async def process_rss_feeds():
                 article_text = soup.get_text()
                 
                 # Generate summary using Gemini
-                post_title, article = summarize_article(entry.title, article_text)
+                post_title, article = summarize_article(entry.title, article_text, provider='openrouter')
                 
                 # Post to WordPress/Ghost
                 response = post_to_ghost(post_title, article, None, entry.link, name)
@@ -226,7 +226,7 @@ async def process_podcast_feeds():
                             time.sleep(5)
                     
                     # Rest of the processing
-                    post_title, article = article_mp3(entry.title, mp3_path)
+                    post_title, article = article_mp3(entry.title, mp3_path, provider='gemini')
                 
                     # Post to WordPress/Ghost
                     response = post_to_ghost(post_title, article, None, entry.link, name)
