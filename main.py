@@ -16,6 +16,7 @@ from genai_helper import summarize_youtube_video, article_mp3, summarize_article
 from summarize_and_post import post_to_wordpress, post_to_ghost
 from telegram_bot import notify_subscribers, start_bot
 from email.utils import parsedate_to_datetime
+from datetime import datetime
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -187,12 +188,18 @@ async def process_podcast_feeds():
                 if hasattr(entry, 'published'):
                     try:
                         pub_date = parsedate_to_datetime(entry.published)
-                        if pub_date.year < 2025:
-                            logging.debug(f"Skipping episode {entry.title} from {pub_date.year}")
+                        # Only process episodes published after 2025/05/27
+                        cutoff_date = datetime(2025, 5, 27)
+                        if pub_date <= cutoff_date:
+                            logging.debug(f"Skipping episode {entry.title} published on {pub_date} (before or on cutoff)")
                             continue
                     except Exception as e:
                         logging.error(f"Error parsing pubDate for {entry.title}: {e}")
                         continue
+                else:
+                    # If no publish date, skip the episode
+                    logging.debug(f"Skipping episode {getattr(entry, 'title', 'unknown')} (no publish date)")
+                    continue
 
                 episode_id = entry.id if hasattr(entry, 'id') else entry.link
                 
