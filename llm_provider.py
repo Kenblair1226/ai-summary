@@ -296,6 +296,8 @@ class LLMService:
     def __init__(self, default_provider: str = "litellm"):
         self.providers = {}
         self.default_provider = default_provider
+        self.heavy_models = os.getenv("HEAVY_MODELS", "").split(',')
+        self.light_models = os.getenv("LIGHT_MODELS", "").split(',')
         self.init_providers()
     
     def init_providers(self):
@@ -397,41 +399,32 @@ class LLMService:
         self,
         prompt: Union[str, List, Dict],
         provider: str = None,
+        model_tier: str = "heavy",
         fallback: bool = True
     ) -> LLMResponse:
-        """Generate content with specified provider, with optional fallback"""
+        """Generate content with specified provider and model tier, with optional fallback"""
         provider_name = provider or self.default_provider
-        
+        models = self.heavy_models if model_tier == "heavy" else self.light_models
+
         if provider_name not in self.providers:
             available = list(self.providers.keys())
             if not available:
                 raise ValueError("No LLM providers available")
             provider_name = available[0]
             logging.warning(f"Provider {provider} not available, using {provider_name}")
-        
-        try:
-            return self.providers[provider_name].generate_content(prompt)
-        except Exception as e:
-            # Log the full error for debugging
-            logging.error(f"Error with provider {provider_name}: {e}")
-            
-            # Check if it's a rate limit error
-            is_rate_limit = self.providers[provider_name].is_rate_limited(e)
-            logging.info(f"Is rate limit error for {provider_name}: {is_rate_limit}")
-            
-            if fallback and is_rate_limit:
-                fallback_provider = self._get_fallback_provider(provider_name)
-                if fallback_provider:
-                    logging.warning(
-                        f"Rate limit hit for {provider_name}, falling back to {fallback_provider}"
-                    )
-                    try:
-                        return self.providers[fallback_provider].generate_content(prompt)
-                    except Exception as fallback_error:
-                        logging.error(f"Fallback to {fallback_provider} also failed: {fallback_error}")
-                        raise  # Re-raise the fallback error
-            # If no fallback or not rate-limited, re-raise the exception
-            raise
+
+        for model in models:
+            try:
+                self.providers[provider_name].model_name = model
+                return self.providers[provider_name].generate_content(prompt)
+            except Exception as e:
+                logging.error(f"Error with provider {provider_name} and model {model}: {e}")
+                if fallback and self.providers[provider_name].is_rate_limited(e):
+                    logging.warning(f"Rate limit hit for {provider_name} with model {model}, trying next model.")
+                    continue
+                else:
+                    raise e
+        raise Exception("All models in the tier failed.")
     
     def generate_content_with_media(
         self,
