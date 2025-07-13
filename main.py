@@ -16,10 +16,12 @@ from genai_helper import summarize_youtube_video, article_mp3, summarize_article
 from summarize_and_post import post_to_wordpress, post_to_ghost
 from telegram_bot import notify_subscribers, start_bot
 from email.utils import parsedate_to_datetime
-from datetime import datetime
+from datetime import datetime, timezone
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+STARTUP_TIME = datetime.now(timezone.utc)
 
 db = DbHelper(os.getenv('DB_PATH', 'database.db'))
 db.initialize_db()
@@ -30,11 +32,15 @@ async def process_new_videos():
 
         for channel_url in channels:
             logging.info(f"Checking new videos for channel: {channel_url}")
-            new_video_ids = check_new_videos(channel_url, db)
-            if new_video_ids:
-                logging.info(f"Found {len(new_video_ids)} new videos.")
-                for video_id in new_video_ids:
-                    video_url = f"https://youtu.be/{video_id}"
+            new_videos = check_new_videos(channel_url, db)
+            if new_videos:
+                logging.info(f"Found {len(new_videos)} new videos.")
+                for video in new_videos:
+                    if video.publish_date.replace(tzinfo=timezone.utc) < STARTUP_TIME:
+                        logging.info(f"Skipping old video: {video.title}")
+                        continue
+
+                    video_url = f"https://youtu.be/{video.video_id}"
 
                     # Get video title using helper
                     logging.info(f"Fetching title for video: {video_url}")
@@ -102,6 +108,19 @@ async def process_rss_feeds():
             article_id = entry.id if hasattr(entry, 'id') else entry.link
             
             if db.is_article_processed(article_id):
+                continue
+
+            if hasattr(entry, 'published'):
+                try:
+                    pub_date = parsedate_to_datetime(entry.published)
+                    if pub_date.replace(tzinfo=timezone.utc) < STARTUP_TIME:
+                        logging.info(f"Skipping old article: {entry.title}")
+                        continue
+                except Exception as e:
+                    logging.error(f"Error parsing pubDate for {entry.title}: {e}")
+                    continue
+            else:
+                logging.debug(f"Skipping article {getattr(entry, 'title', 'unknown')} (no publish date)")
                 continue
                 
             try:
@@ -193,10 +212,8 @@ async def process_podcast_feeds():
                 if hasattr(entry, 'published'):
                     try:
                         pub_date = parsedate_to_datetime(entry.published)
-                        # Only process episodes published after 2025/05/27
-                        cutoff_date = datetime(2025, 5, 27)
-                        if pub_date <= cutoff_date:
-                            logging.debug(f"Skipping episode {entry.title} published on {pub_date} (before or on cutoff)")
+                        if pub_date.replace(tzinfo=timezone.utc) < STARTUP_TIME:
+                            logging.debug(f"Skipping episode {entry.title} published on {pub_date} (before startup)")
                             continue
                     except Exception as e:
                         logging.error(f"Error parsing pubDate for {entry.title}: {e}")

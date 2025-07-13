@@ -47,13 +47,13 @@ def check_new_videos(channel_url, db):
         checked_video_ids = {row[0] for row in cursor.fetchall()}
     
     channel = Channel(channel_url)
-    new_video_ids = [video.video_id for video in channel.videos[:5] if video.video_id not in checked_video_ids]
+    new_videos = [video for video in channel.videos[:5] if video.video_id not in checked_video_ids]
     
-    if new_video_ids:
+    if new_videos:
         # Save new video IDs using DbHelper
-        db.save_checked_video_ids(channel_url, new_video_ids)
+        db.save_checked_video_ids(channel_url, [video.video_id for video in new_videos])
     
-    return new_video_ids
+    return new_videos
 
 def cmd(command, check=True, shell=True, capture_output=True, text=True):
     """
