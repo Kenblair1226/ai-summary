@@ -82,6 +82,7 @@ class LiteLLMProvider(LLMProvider):
             response = litellm.completion(
                 model=self.model_name,
                 messages=messages,
+                custom_llm_provider="openai",
                 **self.generation_config
             )
             
