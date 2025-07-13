@@ -111,6 +111,11 @@ async def process_rss_feeds():
                 for script in soup(["script", "style"]):
                     script.decompose()
                 article_text = soup.get_text()
+
+                # Check for paid content
+                if "Subscribe to Stratechery Plus for full access" in article_text:
+                    logging.info(f"Skipping paid content: {entry.link}")
+                    continue
                 
                 # Generate summary using Gemini
                 post_title, article = summarize_article(entry.title, article_text, provider='openrouter')
