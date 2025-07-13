@@ -3,6 +3,7 @@ import abc
 import logging
 from typing import Dict, List, Union, Optional, Any
 from dotenv import load_dotenv
+import litellm
 
 load_dotenv()
 
@@ -23,12 +24,14 @@ class LLMProvider(abc.ABC):
         api_key: str,
         model_name: str,
         generation_config: Dict = None,
-        system_prompt: str = None
+        system_prompt: str = None,
+        api_base: str = None
     ):
         self.api_key = api_key
         self.model_name = model_name
         self.generation_config = generation_config or {}
         self.system_prompt = system_prompt
+        self.api_base = api_base
         self.setup()
     
     @abc.abstractmethod
@@ -50,6 +53,59 @@ class LLMProvider(abc.ABC):
     def is_rate_limited(self, error: Exception) -> bool:
         """Check if an error is due to rate limiting"""
         pass
+
+class LiteLLMProvider(LLMProvider):
+    """Implementation for LiteLLM"""
+    
+    def setup(self) -> None:
+        litellm.api_key = self.api_key
+        if self.api_base:
+            litellm.api_base = self.api_base
+    
+    def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
+        try:
+            messages = []
+            if self.system_prompt:
+                messages.append({"role": "system", "content": self.system_prompt})
+            
+            if isinstance(prompt, str):
+                messages.append({"role": "user", "content": prompt})
+            elif isinstance(prompt, list):
+                for item in prompt:
+                    if isinstance(item, dict) and 'text' in item:
+                        messages.append({"role": "user", "content": item['text']})
+                    else:
+                        messages.append({"role": "user", "content": str(item)})
+            elif isinstance(prompt, dict) and 'text' in prompt:
+                messages.append({"role": "user", "content": prompt['text']})
+
+            response = litellm.completion(
+                model=self.model_name,
+                messages=messages,
+                **self.generation_config
+            )
+            
+            if response.choices and len(response.choices) > 0:
+                return LLMResponse(response.choices[0].message.content, response)
+            return LLMResponse("", response)
+            
+        except Exception as e:
+            logging.error(f"Error generating content with LiteLLM: {e}")
+            if self.is_rate_limited(e):
+                logging.warning("Rate limit hit for LiteLLM")
+            raise
+    
+    def generate_content_with_media(self, prompt: str, media_file: str) -> LLMResponse:
+        raise NotImplementedError("Media handling not yet implemented for LiteLLM provider.")
+
+    def is_rate_limited(self, error: Exception) -> bool:
+        error_str = str(error).lower()
+        return any(phrase in error_str for phrase in [
+            "rate limit", 
+            "too many requests", 
+            "429", 
+            "quota exceeded"
+        ])
 
 # Import Gemini provider implementation
 import google.generativeai as genai
@@ -236,17 +292,43 @@ class OpenRouterProvider(LLMProvider):
 class LLMService:
     """Service to manage LLM providers and handle fallbacks"""
     
-    def __init__(self, default_provider: str = "gemini"):
+    def __init__(self, default_provider: str = "litellm"):
         self.providers = {}
         self.default_provider = default_provider
         self.init_providers()
     
     def init_providers(self):
         """Initialize available providers from environment variables"""
+        system_prompt = os.getenv("SYSTEM_PROMPT", "")
+
+        # LiteLLM setup
+        litellm_api_key = os.getenv("LITELLM_API_KEY")
+        litellm_model = os.getenv("LITELLM_MODEL")
+        litellm_api_base = os.getenv("LITELLM_API_BASE")
+
+        if litellm_api_key and litellm_model:
+            generation_config = {
+                "temperature": float(os.getenv("LITELLM_TEMPERATURE", "1.0")),
+                "top_p": float(os.getenv("LITELLM_TOP_P", "0.95")),
+                "max_tokens": int(os.getenv("LITELLM_MAX_TOKENS", "8192")),
+            }
+            try:
+                self.providers["litellm"] = LiteLLMProvider(
+                    api_key=litellm_api_key,
+                    model_name=litellm_model,
+                    generation_config=generation_config,
+                    system_prompt=system_prompt,
+                    api_base=litellm_api_base
+                )
+                logging.info(f"LiteLLM provider initialized with model {litellm_model}")
+            except Exception as e:
+                logging.error(f"Failed to initialize LiteLLM provider: {e}")
+        else:
+            logging.warning("LITELLM_API_KEY or LITELLM_MODEL not found. LiteLLM provider not initialized.")
+
         # Gemini setup
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-exp-03-25")
-        system_prompt = os.getenv("SYSTEM_PROMPT", "")
         
         if gemini_api_key:
             generation_config = {
