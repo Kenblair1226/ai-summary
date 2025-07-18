@@ -171,7 +171,7 @@ def summarize_mp3(path, **kwargs):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content_with_media(prompt, path, model_tier="heavy", **kwargs)
+        response = llm_service.generate_content_with_media(prompt, path, **kwargs)
         return response
     except Exception as e:
         logging.error(f"Error summarizing MP3: {e}")
@@ -203,7 +203,7 @@ def article_mp3(title, path, **kwargs):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content_with_media(prompt, path, model_tier="heavy", **kwargs)
+        response = llm_service.generate_content_with_media(prompt, path, **kwargs)
         response_lines = response.text.split('\n')
         title = response_lines[0]
         content = '\n'.join(response_lines[1:])
