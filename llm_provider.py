@@ -62,8 +62,11 @@ class LiteLLMProvider(LLMProvider):
         if self.api_base:
             litellm.api_base = self.api_base
     
-    def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
+    def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
+            # Merge kwargs with generation_config, with kwargs taking precedence
+            config = {**self.generation_config, **kwargs}
+            
             messages = []
             if self.system_prompt:
                 messages.append({"role": "system", "content": self.system_prompt})
@@ -83,7 +86,7 @@ class LiteLLMProvider(LLMProvider):
                 model=self.model_name,
                 messages=messages,
                 custom_llm_provider="openai",
-                **self.generation_config
+                **config
             )
             
             if response.choices and len(response.choices) > 0:
@@ -158,28 +161,16 @@ class GeminiProvider(LLMProvider):
             return [content]
         return [content]
     
-    def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
+    def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
-            # Check if we need to chunk the content
-            chunks = self._chunk_content(prompt)
-            
-            if len(chunks) == 1:
-                # If only one chunk, process normally
-                response = self.model.generate_content(chunks[0])
+            # Merge kwargs with generation_config, with kwargs taking precedence
+            if kwargs:
+                config = {**self.generation_config, **kwargs}
+                # Create a new GenerationConfig for this specific request
+                generation_config = genai.GenerationConfig(**config)
+                response = self.model.generate_content(prompt, generation_config=generation_config)
             else:
-                # Process chunks and combine results
-                responses = []
-                for chunk in chunks:
-                    chunk_response = self.model.generate_content(chunk)
-                    if hasattr(chunk_response, 'text'):
-                        responses.append(chunk_response.text)
-                    else:
-                        responses.append(str(chunk_response))
-                
-                # Combine responses
-                combined_response = " ".join(responses)
-                return LLMResponse(combined_response, responses)
-            
+                response = self.model.generate_content(prompt)
             if hasattr(response, 'text'):
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
@@ -255,13 +246,16 @@ class OpenRouterProvider(LLMProvider):
             base_url="https://openrouter.ai/api/v1"
         )
     
-    def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
+    def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
+            # Merge kwargs with generation_config, with kwargs taking precedence
+            config = {**self.generation_config, **kwargs}
+            
             # Convert generation_config to OpenAI format
             params = {
-                "temperature": self.generation_config.get("temperature", 0.7),
-                "max_tokens": self.generation_config.get("max_output_tokens", 1024),
-                "top_p": self.generation_config.get("top_p", 0.95),
+                "temperature": config.get("temperature", 0.7),
+                "max_tokens": config.get("max_output_tokens", 1024),
+                "top_p": config.get("top_p", 0.95),
             }
             
             # Handle different prompt formats
@@ -474,7 +468,8 @@ class LLMService:
         prompt: Union[str, List, Dict],
         provider: str = None,
         model_tier: str = "heavy",
-        fallback: bool = True
+        fallback: bool = True,
+        **kwargs
     ) -> LLMResponse:
         """Generate content with specified provider and model tier, with optional fallback"""
         provider_name = provider or self.default_provider
@@ -490,14 +485,33 @@ class LLMService:
         for model in models:
             try:
                 self.providers[provider_name].model_name = model
-                return self.providers[provider_name].generate_content(prompt)
+                return self.providers[provider_name].generate_content(prompt, **kwargs)
             except Exception as e:
                 logging.error(f"Error with provider {provider_name} and model {model}: {e}")
                 if fallback and self.providers[provider_name].is_rate_limited(e):
                     logging.warning(f"Rate limit hit for {provider_name} with model {model}, trying next model.")
+                    import time
+                    time.sleep(10)
                     continue
                 else:
                     raise e
+        # If we exhausted all models in the tier and model_tier is 'light', fallback to heavy models
+        if model_tier == "light" and fallback:
+            logging.warning("All free (light) models failed or hit rate limit. Falling back to heavy models.")
+            heavy_models = self.heavy_models
+            for model in heavy_models:
+                try:
+                    self.providers[provider_name].model_name = model
+                    return self.providers[provider_name].generate_content(prompt, **kwargs)
+                except Exception as e:
+                    logging.error(f"Error with provider {provider_name} and heavy model {model}: {e}")
+                    if fallback and self.providers[provider_name].is_rate_limited(e):
+                        logging.warning(f"Rate limit hit for {provider_name} with heavy model {model}, trying next heavy model.")
+                        import time
+                        time.sleep(10)
+                        continue
+                    else:
+                        raise e
         raise Exception("All models in the tier failed.")
     
     def generate_content_with_media(
