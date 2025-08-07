@@ -421,9 +421,28 @@ class LLMService:
                 logging.error(f"Error with provider {provider_name} and model {model}: {e}")
                 if fallback and self.providers[provider_name].is_rate_limited(e):
                     logging.warning(f"Rate limit hit for {provider_name} with model {model}, trying next model.")
+                    import time
+                    time.sleep(10)
                     continue
                 else:
                     raise e
+        # If we exhausted all models in the tier and model_tier is 'light', fallback to heavy models
+        if model_tier == "light" and fallback:
+            logging.warning("All free (light) models failed or hit rate limit. Falling back to heavy models.")
+            heavy_models = self.heavy_models
+            for model in heavy_models:
+                try:
+                    self.providers[provider_name].model_name = model
+                    return self.providers[provider_name].generate_content(prompt)
+                except Exception as e:
+                    logging.error(f"Error with provider {provider_name} and heavy model {model}: {e}")
+                    if fallback and self.providers[provider_name].is_rate_limited(e):
+                        logging.warning(f"Rate limit hit for {provider_name} with heavy model {model}, trying next heavy model.")
+                        import time
+                        time.sleep(10)
+                        continue
+                    else:
+                        raise e
         raise Exception("All models in the tier failed.")
     
     def generate_content_with_media(

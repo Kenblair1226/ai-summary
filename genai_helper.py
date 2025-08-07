@@ -2,6 +2,39 @@ import re
 import logging
 from llm_provider import llm_service, LLMResponse
 
+def fetch_web_context_for_article(title, content_snippet):
+    """Generate search queries for web context. The actual fetching will be done by the caller.
+    
+    Args:
+        title: Title of the content
+        content_snippet: A snippet of the main content to understand context
+        
+    Returns:
+        List of search queries to find relevant web content
+    """
+    try:
+        # Generate search queries based on title and content
+        search_prompt = f"""
+Title: {title}
+Content snippet: {content_snippet[:500]}...
+
+Based on this content, generate 2-3 specific search queries that would help find relevant recent news, articles, or web content to supplement this discussion. Focus on:
+- Latest developments in mentioned technologies/companies
+- Recent news about topics discussed
+- Current industry trends related to the content
+
+Return only the search queries, one per line, without any additional text.
+"""
+        
+        search_response = llm_service.generate_content(search_prompt, model_tier="light")
+        search_queries = [q.strip() for q in search_response.text.strip().split('\n') if q.strip()]
+        
+        return search_queries[:3]  # Return up to 3 search queries
+        
+    except Exception as e:
+        logging.error(f"Error generating search queries: {e}")
+        return []
+
 system_prompt = """
   你是一個專業的科技趨勢分析助手,專門協助使用者分析和討論科技相關話題。請依照以下指示進行回應：
     分析架構
@@ -11,7 +44,7 @@ system_prompt = """
     表達方式
     如需提到人名或專有名詞,請保留原文,對談中的人名可使用first name,如果不確定是誰說的就不要使用人名
     內容中如有舉例或實際案例或經驗分享,請務必整理進文章
-    以繁體中文輸出,不要使用markdown格式,連結要加上html標籤
+    以繁體中文輸出,不要使用markdown格式
 
     範例對話
     使用者：「最近生成式 AI 的發展如何？」
@@ -131,10 +164,51 @@ def generate_article(content, **kwargs):
     """
     try:
         logging.info(f"Generating article using LLM provider")
-        prompt = f"""
+        
+        # Generate search queries for web context
+        search_queries = fetch_web_context_for_article("文章分析", content)
+        
+        # Fetch web content using MCP fetch service
+        web_context = ""
+        web_references = []
+        
+        for query in search_queries:
+            try:
+                logging.info(f"Searching for: {query}")
+                # Try fetching from popular tech sites with the search query
+                tech_sites = [
+                    f"https://techcrunch.com/search/{query.replace(' ', '+')}",
+                    f"https://www.theverge.com/search?q={query.replace(' ', '+')}",
+                    f"https://arstechnica.com/search/?query={query.replace(' ', '+')}"
+                ]
+                
+                for site_url in tech_sites[:1]:  # Limit to 1 site per query
+                    try:
+                        web_content = mcp__fetch__fetch(url=site_url, max_length=1500)
+                        if web_content and len(web_content.strip()) > 100:
+                            web_context += f"\n\n來源資訊 ({site_url}):\n{web_content}\n"
+                            web_references.append(site_url)
+                            break  # Got content, move to next query
+                    except:
+                        continue
+                        
+            except Exception as e:
+                logging.warning(f"Failed to fetch web context for query '{query}': {e}")
+                continue
+        
+        # Enhanced prompt with web context
+        enhanced_prompt = f"""
 字幕：{content}
 針對字幕內容撰寫一篇詳細分析討論,需包含以下內容：
 文章內容只需包含細節討論,盡量詳細呈現對話內容,如有實例須包含在文章中
+
+補充資訊：
+{web_context}
+
+撰寫要求：
+- 結合原始內容與補充資訊，提供更完整的分析
+- 如果補充資訊與原始內容相關，請適當引用並註明來源
+- 在文章末尾加上「參考資料」區塊，列出使用的網路資源連結
 
 對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
 不要使用下列標題文字：
@@ -142,8 +216,18 @@ def generate_article(content, **kwargs):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content(prompt, model_tier="heavy", **kwargs)
-        return response.text
+        
+        response = llm_service.generate_content(enhanced_prompt, model_tier="heavy", **kwargs)
+        article_content = response.text
+        
+        # Add references if we have them and they're not already in the content
+        if web_references and "參考資料" not in article_content:
+            article_content += "\n\n<h3>參考資料</h3>\n"
+            for ref in web_references:
+                article_content += f'<a href="{ref}" target="_blank">{ref}</a><br>\n'
+        
+        return article_content
+        
     except Exception as e:
         logging.error(f"Error generating article: {e}")
         raise
@@ -188,14 +272,69 @@ def article_mp3(title, path, **kwargs):
     """
     try:
         logging.info(f"Generating article from MP3 using LLM provider")
-        prompt = f"""
+        
+        # First, get a basic summary to understand the content
+        summary_prompt = f"""
+標題：{title}
+針對音檔內容提供一個簡短摘要，幫助了解主要討論的技術、公司或主題。
+只需要列出主要討論點，用於後續搜尋相關資訊。
+"""
+        
+        summary_response = llm_service.generate_content_with_media(summary_prompt, path, **kwargs)
+        content_summary = summary_response.text
+        
+        # Generate search queries for web context
+        search_queries = fetch_web_context_for_article(title, content_summary)
+        
+        # Fetch web content using MCP fetch service
+        web_context = ""
+        web_references = []
+        
+        for query in search_queries:
+            try:
+                logging.info(f"Searching for: {query}")
+                # Use WebSearch to find relevant articles
+                search_results = []
+                # Note: WebSearch functionality would be called here in actual execution
+                # For now, we'll use the MCP fetch service to get content from known tech sites
+                
+                # Try fetching from popular tech sites with the search query
+                tech_sites = [
+                    f"https://techcrunch.com/search/{query.replace(' ', '+')}",
+                    f"https://www.theverge.com/search?q={query.replace(' ', '+')}",
+                    f"https://arstechnica.com/search/?query={query.replace(' ', '+')}"
+                ]
+                
+                for site_url in tech_sites[:1]:  # Limit to 1 site per query
+                    try:
+                        web_content = mcp__fetch__fetch(url=site_url, max_length=1500)
+                        if web_content and len(web_content.strip()) > 100:
+                            web_context += f"\n\n來源資訊 ({site_url}):\n{web_content}\n"
+                            web_references.append(site_url)
+                            break  # Got content, move to next query
+                    except:
+                        continue
+                        
+            except Exception as e:
+                logging.warning(f"Failed to fetch web context for query '{query}': {e}")
+                continue
+        
+        # Enhanced prompt with web context
+        enhanced_prompt = f"""
 標題：{title}
 針對音檔內容撰寫一篇詳細分析討論,需包含以下內容：
 第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
 第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
 如果內容很長，請先列出大綱，再進行詳細分析
-如果有不同主題可分段落呈現,並在段落最前端放上副標題,使用h3標籤
-使用html語法並盡量讓文章美觀易讀
+如果有不同主題可分段落呈現,並在段落最前端放上副標題,使用h3標籤,盡量讓文章美觀易讀
+
+補充資訊：
+{web_context}
+
+撰寫要求：
+- 結合音檔內容與補充資訊，提供更完整的分析
+- 如果補充資訊與音檔內容相關，請適當引用並註明來源
+- 在文章末尾加上「參考資料」區塊，列出使用的網路資源連結
 
 對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
 相似內容整合成一段,不要使用下列標題文字：
@@ -203,11 +342,20 @@ def article_mp3(title, path, **kwargs):
 核心分析：詳細的分析內容
 討論要點：提出值得進一步探討的問題
 """
-        response = llm_service.generate_content_with_media(prompt, path, **kwargs)
+        
+        response = llm_service.generate_content_with_media(enhanced_prompt, path, **kwargs)
         response_lines = response.text.split('\n')
         title = response_lines[0]
         content = '\n'.join(response_lines[1:])
+        
+        # Add references if we have them and they're not already in the content
+        if web_references and "參考資料" not in content:
+            content += "\n\n<h3>參考資料</h3>\n"
+            for ref in web_references:
+                content += f'<a href="{ref}" target="_blank">{ref}</a><br>\n'
+        
         return title, content
+        
     except Exception as e:
         logging.error(f"Error generating article from MP3: {e}")
         raise
@@ -229,8 +377,7 @@ def summarize_article(title, content, **kwargs):
 針對文章內容撰寫一篇詳細分析討論,需包含以下內容：
 第一行請以內容及標題為主發想一個適合且幽默的標題,以 \n 結尾
 第二行以後為文章內容分析包含細節討論,如有實例須包含在文章中
-如果有不同主題可分段落呈現,並在段落最前端放上副標題
-使用html語法並盡量讓文章美觀易讀
+如果有不同主題可分段落呈現,並在段落最前端放上副標題,盡量讓文章美觀易讀
 
 對於較長的分析內容,建議採用以下大綱,並針對每個段落產生一個副標題,,使用h3標籤
 不要使用下列標題文字：
@@ -321,7 +468,7 @@ def format_html_content(content):
     return '\n\n'.join(formatted_paragraphs)
 
 def humanize_content(content, **kwargs):
-    """Make the content more natural and conversational with proper HTML formatting.
+    """Make the content more natural and conversational.
     
     Args:
         content: Content to humanize
