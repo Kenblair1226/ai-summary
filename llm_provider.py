@@ -62,8 +62,11 @@ class LiteLLMProvider(LLMProvider):
         if self.api_base:
             litellm.api_base = self.api_base
     
-    def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
+    def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
+            # Merge kwargs with generation_config, with kwargs taking precedence
+            config = {**self.generation_config, **kwargs}
+            
             messages = []
             if self.system_prompt:
                 messages.append({"role": "system", "content": self.system_prompt})
@@ -83,7 +86,7 @@ class LiteLLMProvider(LLMProvider):
                 model=self.model_name,
                 messages=messages,
                 custom_llm_provider="openai",
-                **self.generation_config
+                **config
             )
             
             if response.choices and len(response.choices) > 0:
@@ -122,9 +125,16 @@ class GeminiProvider(LLMProvider):
             system_instruction=[self.system_prompt] if self.system_prompt else None
         )
     
-    def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
+    def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
-            response = self.model.generate_content(prompt)
+            # Merge kwargs with generation_config, with kwargs taking precedence
+            if kwargs:
+                config = {**self.generation_config, **kwargs}
+                # Create a new GenerationConfig for this specific request
+                generation_config = genai.GenerationConfig(**config)
+                response = self.model.generate_content(prompt, generation_config=generation_config)
+            else:
+                response = self.model.generate_content(prompt)
             if hasattr(response, 'text'):
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
@@ -181,13 +191,16 @@ class OpenRouterProvider(LLMProvider):
             base_url="https://openrouter.ai/api/v1"
         )
     
-    def generate_content(self, prompt: Union[str, List, Dict]) -> LLMResponse:
+    def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
+            # Merge kwargs with generation_config, with kwargs taking precedence
+            config = {**self.generation_config, **kwargs}
+            
             # Convert generation_config to OpenAI format
             params = {
-                "temperature": self.generation_config.get("temperature", 0.7),
-                "max_tokens": self.generation_config.get("max_output_tokens", 1024),
-                "top_p": self.generation_config.get("top_p", 0.95),
+                "temperature": config.get("temperature", 0.7),
+                "max_tokens": config.get("max_output_tokens", 1024),
+                "top_p": config.get("top_p", 0.95),
             }
             
             # Handle different prompt formats
@@ -400,7 +413,8 @@ class LLMService:
         prompt: Union[str, List, Dict],
         provider: str = None,
         model_tier: str = "heavy",
-        fallback: bool = True
+        fallback: bool = True,
+        **kwargs
     ) -> LLMResponse:
         """Generate content with specified provider and model tier, with optional fallback"""
         provider_name = provider or self.default_provider
@@ -416,7 +430,7 @@ class LLMService:
         for model in models:
             try:
                 self.providers[provider_name].model_name = model
-                return self.providers[provider_name].generate_content(prompt)
+                return self.providers[provider_name].generate_content(prompt, **kwargs)
             except Exception as e:
                 logging.error(f"Error with provider {provider_name} and model {model}: {e}")
                 if fallback and self.providers[provider_name].is_rate_limited(e):
@@ -433,7 +447,7 @@ class LLMService:
             for model in heavy_models:
                 try:
                     self.providers[provider_name].model_name = model
-                    return self.providers[provider_name].generate_content(prompt)
+                    return self.providers[provider_name].generate_content(prompt, **kwargs)
                 except Exception as e:
                     logging.error(f"Error with provider {provider_name} and heavy model {model}: {e}")
                     if fallback and self.providers[provider_name].is_rate_limited(e):

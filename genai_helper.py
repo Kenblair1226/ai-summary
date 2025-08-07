@@ -541,7 +541,7 @@ Requirements:
 - Return only the relevant tag names separated by commas, nothing else
 - If no tags are relevant, return "none"
 """
-        response = llm_service.generate_content(prompt, model_tier="light", **kwargs)
+        response = llm_service.generate_content(prompt, model_tier="light", temperature=0.1, **kwargs)
         
         suggested_tags = response.text.strip().lower()
         if suggested_tags == "none":
