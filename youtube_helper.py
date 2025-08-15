@@ -30,8 +30,15 @@ def download_audio_from_youtube(video_url, output_path):
     try:
         yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
     except Exception as e:
-        logging.warning(f"Failed to create YouTube object with po_token: {e}. Trying without po_token.")
-        yt = YouTube(video_url, use_po_token=False)
+        logging.error(f"Error downloading audio with po_token for {video_url}: {e}")
+        
+        # Try without po_token as fallback
+        try:
+            logging.info(f"Attempting fallback without po_token for {video_url}")
+            yt = YouTube(video_url, use_po_token=False)
+        except Exception as fallback_error:
+            logging.error(f"Fallback also failed for {video_url}: {fallback_error}")
+            raise
     
     title = yt.title
     logging.info(f"Downloading audio from {video_url} with title: {title}")
