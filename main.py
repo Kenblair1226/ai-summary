@@ -21,6 +21,12 @@ from datetime import datetime, timezone
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Reduce noise from HTTP request logs
+logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+
 STARTUP_TIME = datetime.now(timezone.utc)
 
 db = DbHelper(os.getenv('DB_PATH', 'database.db'))

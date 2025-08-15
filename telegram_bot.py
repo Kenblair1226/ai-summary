@@ -326,6 +326,12 @@ if __name__ == '__main__':
     import sys
     logging.basicConfig(level=logging.INFO)
     
+    # Reduce noise from HTTP request logs
+    logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+    logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.WARNING)
+    logging.getLogger('httpx').setLevel(logging.WARNING)
+    logging.getLogger('httpcore').setLevel(logging.WARNING)
+    
     if len(sys.argv) > 1 and sys.argv[1] == '--test':
         asyncio.run(test_send_message())
     else:
