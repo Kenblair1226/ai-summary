@@ -14,12 +14,25 @@ def get_youtube_title(video_url):
         yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
         return yt.title
     except Exception as e:
-        # Use logging for errors
-        logging.error(f"Error fetching title for {video_url}: {e}")
-        return None
+        # Log the original error
+        logging.error(f"Error fetching title with po_token for {video_url}: {e}")
+        
+        # Try without po_token as fallback
+        try:
+            logging.info(f"Attempting fallback without po_token for {video_url}")
+            yt = YouTube(video_url, use_po_token=False)
+            return yt.title
+        except Exception as fallback_error:
+            logging.error(f"Fallback also failed for {video_url}: {fallback_error}")
+            return None
 
 def download_audio_from_youtube(video_url, output_path):
-    yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
+    try:
+        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
+    except Exception as e:
+        logging.warning(f"Failed to create YouTube object with po_token: {e}. Trying without po_token.")
+        yt = YouTube(video_url, use_po_token=False)
+    
     title = yt.title
     logging.info(f"Downloading audio from {video_url} with title: {title}")
     audio_stream = yt.streams.filter(only_audio=True).first()
@@ -72,9 +85,26 @@ def po_token_verifier() -> Tuple[str, str]:
 
 
 def generate_youtube_token() -> dict:
-    result = cmd("node scripts/youtube-token-generator.js")
-    data = json.loads(result.stdout)
-    return data
+    try:
+        # Add timeout to prevent hanging
+        result = subprocess.run(
+            ["node", "scripts/youtube-token-generator.js"], 
+            capture_output=True, 
+            text=True, 
+            timeout=30,  # 30 second timeout
+            check=True
+        )
+        data = json.loads(result.stdout)
+        return data
+    except subprocess.TimeoutExpired:
+        logging.error("YouTube token generation timed out after 30 seconds")
+        raise Exception("YouTube token generation timed out")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"YouTube token generation failed with exit code {e.returncode}: {e.stderr}")
+        raise Exception(f"YouTube token generation failed: {e.stderr}")
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to parse YouTube token JSON: {e}")
+        raise Exception("Invalid JSON response from token generator")
 
 def is_valid_youtube_url(url):
     """Check if URL is a valid YouTube video URL"""
