@@ -17,14 +17,22 @@ def get_youtube_title(video_url):
         # Log the original error
         logging.error(f"Error fetching title with po_token for {video_url}: {e}")
         
-        # Try without po_token as fallback
+        # Try OAuth approach as fallback
         try:
-            logging.info(f"Attempting fallback without po_token for {video_url}")
-            yt = YouTube(video_url, use_po_token=False)
+            logging.info(f"Attempting OAuth fallback for {video_url}")
+            yt = YouTube(video_url, client="WEB", use_oauth=True, allow_oauth_cache=True)
             return yt.title
-        except Exception as fallback_error:
-            logging.error(f"Fallback also failed for {video_url}: {fallback_error}")
-            return None
+        except Exception as oauth_error:
+            logging.error(f"OAuth fallback failed for {video_url}: {oauth_error}")
+            
+            # Final fallback without po_token
+            try:
+                logging.info(f"Attempting final fallback without po_token for {video_url}")
+                yt = YouTube(video_url, use_po_token=False)
+                return yt.title
+            except Exception as final_error:
+                logging.error(f"All fallback methods failed for {video_url}: {final_error}")
+                return None
 
 def download_audio_from_youtube(video_url, output_path):
     try:
@@ -32,13 +40,20 @@ def download_audio_from_youtube(video_url, output_path):
     except Exception as e:
         logging.error(f"Error downloading audio with po_token for {video_url}: {e}")
         
-        # Try without po_token as fallback
+        # Try OAuth approach as fallback
         try:
-            logging.info(f"Attempting fallback without po_token for {video_url}")
-            yt = YouTube(video_url, use_po_token=False)
-        except Exception as fallback_error:
-            logging.error(f"Fallback also failed for {video_url}: {fallback_error}")
-            raise
+            logging.info(f"Attempting OAuth fallback for {video_url}")
+            yt = YouTube(video_url, client="WEB", use_oauth=True, allow_oauth_cache=True)
+        except Exception as oauth_error:
+            logging.error(f"OAuth fallback failed for {video_url}: {oauth_error}")
+            
+            # Final fallback without po_token
+            try:
+                logging.info(f"Attempting final fallback without po_token for {video_url}")
+                yt = YouTube(video_url, use_po_token=False)
+            except Exception as final_error:
+                logging.error(f"All fallback methods failed for {video_url}: {final_error}")
+                raise
     
     title = yt.title
     logging.info(f"Downloading audio from {video_url} with title: {title}")
