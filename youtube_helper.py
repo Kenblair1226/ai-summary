@@ -11,21 +11,26 @@ from db_helper import initialize_db, get_checked_video_ids, save_checked_video_i
 def get_youtube_title(video_url):
     """Fetches the title of a YouTube video."""
     try:
-        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
+        # Primary: Built-in PO token method (WEB client with botguard)
+        yt = YouTube(
+            video_url,
+            client="WEB",
+            use_po_token=True,
+            allow_oauth_cache=True
+        )
         return yt.title
     except Exception as e:
-        # Log the original error
-        logging.error(f"Error fetching title with po_token for {video_url}: {e}")
+        logging.error(f"Error fetching title with built-in po_token for {video_url}: {e}")
         
-        # Try OAuth approach as fallback
+        # Secondary: Custom Node.js script as po_token_verifier
         try:
-            logging.info(f"Attempting OAuth fallback for {video_url}")
-            yt = YouTube(video_url, client="WEB", use_oauth=True, allow_oauth_cache=True)
+            logging.info(f"Attempting Node.js po_token_verifier fallback for {video_url}")
+            yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
             return yt.title
-        except Exception as oauth_error:
-            logging.error(f"OAuth fallback failed for {video_url}: {oauth_error}")
+        except Exception as nodejs_error:
+            logging.error(f"Node.js po_token_verifier failed for {video_url}: {nodejs_error}")
             
-            # Final fallback without po_token
+            # Final: No PO token
             try:
                 logging.info(f"Attempting final fallback without po_token for {video_url}")
                 yt = YouTube(video_url, use_po_token=False)
@@ -36,18 +41,24 @@ def get_youtube_title(video_url):
 
 def download_audio_from_youtube(video_url, output_path):
     try:
-        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
+        # Primary: Built-in PO token method (WEB client with botguard)
+        yt = YouTube(
+            video_url,
+            client="WEB",
+            use_po_token=True,
+            allow_oauth_cache=True
+        )
     except Exception as e:
-        logging.error(f"Error downloading audio with po_token for {video_url}: {e}")
+        logging.error(f"Error downloading audio with built-in po_token for {video_url}: {e}")
         
-        # Try OAuth approach as fallback
+        # Secondary: Custom Node.js script as po_token_verifier
         try:
-            logging.info(f"Attempting OAuth fallback for {video_url}")
-            yt = YouTube(video_url, client="WEB", use_oauth=True, allow_oauth_cache=True)
-        except Exception as oauth_error:
-            logging.error(f"OAuth fallback failed for {video_url}: {oauth_error}")
+            logging.info(f"Attempting Node.js po_token_verifier fallback for {video_url}")
+            yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
+        except Exception as nodejs_error:
+            logging.error(f"Node.js po_token_verifier failed for {video_url}: {nodejs_error}")
             
-            # Final fallback without po_token
+            # Final: No PO token
             try:
                 logging.info(f"Attempting final fallback without po_token for {video_url}")
                 yt = YouTube(video_url, use_po_token=False)
@@ -60,7 +71,7 @@ def download_audio_from_youtube(video_url, output_path):
     audio_stream = yt.streams.filter(only_audio=True).first()
     audio_file = audio_stream.download(output_path=output_path)
     
-    base, ext = os.path.splitext(audio_file)
+    base, _ = os.path.splitext(audio_file)
     new_file = base + '.mp3'
     
     subprocess.run(['ffmpeg', '-i', audio_file, new_file])
