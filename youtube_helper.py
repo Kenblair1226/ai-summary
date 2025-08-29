@@ -11,24 +11,25 @@ from db_helper import initialize_db, get_checked_video_ids, save_checked_video_i
 def get_youtube_title(video_url):
     """Fetches the title of a YouTube video."""
     try:
-        # Primary: Built-in PO token method (WEB client with botguard)
-        yt = YouTube(
-            video_url,
-            client="WEB",
-            use_po_token=True,
-            allow_oauth_cache=True
-        )
+        # Primary: Custom Node.js script via generate_youtube_token()
+        logging.info(f"Attempting generate_youtube_token() method for {video_url}")
+        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
         return yt.title
     except Exception as e:
-        logging.error(f"Error fetching title with built-in po_token for {video_url}: {e}")
+        logging.error(f"Error fetching title with generate_youtube_token() for {video_url}: {e}")
         
-        # Secondary: Custom Node.js script as po_token_verifier
+        # Secondary: Built-in PO token method (WEB client with botguard)
         try:
-            logging.info(f"Attempting Node.js po_token_verifier fallback for {video_url}")
-            yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
+            logging.info(f"Attempting built-in po_token fallback for {video_url}")
+            yt = YouTube(
+                video_url,
+                client="WEB",
+                use_po_token=True,
+                allow_oauth_cache=True
+            )
             return yt.title
-        except Exception as nodejs_error:
-            logging.error(f"Node.js po_token_verifier failed for {video_url}: {nodejs_error}")
+        except Exception as builtin_error:
+            logging.error(f"Built-in po_token failed for {video_url}: {builtin_error}")
             
             # Final: No PO token
             try:
@@ -41,22 +42,23 @@ def get_youtube_title(video_url):
 
 def download_audio_from_youtube(video_url, output_path):
     try:
-        # Primary: Built-in PO token method (WEB client with botguard)
-        yt = YouTube(
-            video_url,
-            client="WEB",
-            use_po_token=True,
-            allow_oauth_cache=True
-        )
+        # Primary: Custom Node.js script via generate_youtube_token()
+        logging.info(f"Attempting generate_youtube_token() method for {video_url}")
+        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
     except Exception as e:
-        logging.error(f"Error downloading audio with built-in po_token for {video_url}: {e}")
+        logging.error(f"Error downloading audio with generate_youtube_token() for {video_url}: {e}")
         
-        # Secondary: Custom Node.js script as po_token_verifier
+        # Secondary: Built-in PO token method (WEB client with botguard)
         try:
-            logging.info(f"Attempting Node.js po_token_verifier fallback for {video_url}")
-            yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
-        except Exception as nodejs_error:
-            logging.error(f"Node.js po_token_verifier failed for {video_url}: {nodejs_error}")
+            logging.info(f"Attempting built-in po_token fallback for {video_url}")
+            yt = YouTube(
+                video_url,
+                client="WEB",
+                use_po_token=True,
+                allow_oauth_cache=True
+            )
+        except Exception as builtin_error:
+            logging.error(f"Built-in po_token failed for {video_url}: {builtin_error}")
             
             # Final: No PO token
             try:
