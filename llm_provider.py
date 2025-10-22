@@ -182,26 +182,7 @@ class GeminiProvider(LLMProvider):
 
     def generate_content_with_media(self, prompt: str, media_file: str) -> LLMResponse:
         try:
-            # Check if the media_file is a YouTube URL
-            if media_file.startswith(('http://', 'https://')) and ('youtube.com' in media_file or 'youtu.be' in media_file):
-                logging.info(f"Processing YouTube URL: {media_file}")
-                logging.debug(f"Prompt for YouTube video: {prompt}")
-                # For YouTube URLs, we just pass the URL and prompt
-                # Gemini's API will handle the video processing
-                response = self.model.generate_content([
-                    {
-                        "file_data": {
-                            "file_uri": media_file
-                        }
-                    },
-                    prompt
-                ])
-                logging.debug("Successfully sent request to Gemini for YouTube video processing")
-            else:
-                # For local files, use the existing upload_file method
-                file = genai.upload_file(media_file)
-                response = self.model.generate_content([file, prompt])
-
+            response = self.model.generate_content([prompt, media_file])
             if hasattr(response, 'text'):
                 logging.debug(f"Received response from Gemini: {response.text[:200]}...")  # Log first 200 chars
                 return LLMResponse(response.text, response)
