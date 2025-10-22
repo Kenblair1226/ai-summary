@@ -146,8 +146,7 @@ class GeminiProvider(LLMProvider):
     
     def generate_content_with_media(self, prompt: str, media_file: str) -> LLMResponse:
         try:
-            file = genai.upload_file(media_file)
-            response = self.model.generate_content([file, prompt])
+            response = self.model.generate_content([prompt, media_file])
             if hasattr(response, 'text'):
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
