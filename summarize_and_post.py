@@ -4,7 +4,7 @@ import requests
 from base64 import b64encode
 import jwt
 import datetime
-from genai_helper import article_mp3, generate_slug, humanize_content, find_relevant_tags_with_llm
+from genai_helper import article_mp3, generate_slug, humanize_content
 from youtube_helper import download_audio_from_youtube
 import uuid
 import shutil
@@ -456,12 +456,8 @@ def post_to_ghost(title, content, video_url, post_url, channel_url):
     channel_handle = extract_channel_handle(channel_url)
     channel_tag = [{'name': channel_handle}] if channel_handle else []
     
-    # Get available tags and find relevant ones using LLM
-    available_tags = get_ghost_tags()
-    content_tags = find_relevant_tags_with_llm(title, content, available_tags)
-    
-    # Combine tags: always include 'summary' tag, channel tag if exists, and any relevant content tags
-    tags = [{'name': 'summary'}] + channel_tag + content_tags
+    # Combine tags: always include 'summary' tag, channel tag if exists
+    tags = [{'name': 'summary'}] + channel_tag
 
     # Remove HTML tags from the title
     clean_title = remove_html_tags(title)
