@@ -22,7 +22,7 @@ os.environ['GEMINI_API_KEY'] = 'test_gemini_key'
 os.environ['OPENROUTER_API_KEY'] = 'test_openrouter_key'
 os.environ['LITELLM_API_KEY'] = 'test_litellm_key'
 os.environ['LITELLM_MODEL'] = 'test_model'
-os.environ['HEAVY_MODELS'] = 'gemini-2.5-pro-exp-03-25,gpt-4-turbo,claude-3-opus'
+os.environ['HEAVY_MODELS'] = 'gemini-3-pro,gpt-4-turbo,claude-3-opus'
 os.environ['LIGHT_MODELS'] = 'gemini-1.5-flash,gpt-3.5-turbo,claude-3-haiku'
 
 from llm_provider import LLMService, LLMResponse

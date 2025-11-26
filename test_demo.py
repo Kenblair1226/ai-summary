@@ -63,7 +63,7 @@ def demonstrate_test_scenarios():
     # Scenario 1: Model Switching
     print("\n📊 Scenario 1: Model Switching")
     print("   Task: Article summarization (heavy)")
-    print("   Expected: Uses gemini-2.5-pro-exp-03-25")
+    print("   Expected: Uses gemini-3-pro")
     print("   Fallback: Falls back to gpt-4-turbo if rate limited")
     print("   Test: Verifies correct model selection and fallback")
     

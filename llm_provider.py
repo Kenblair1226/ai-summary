@@ -343,7 +343,7 @@ class LLMService:
 
         # Gemini setup
         gemini_api_key = os.getenv("GEMINI_API_KEY")
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-exp-03-25")
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3-pro")
         
         if gemini_api_key:
             generation_config = {
@@ -369,7 +369,7 @@ class LLMService:
         
         # OpenRouter setup
         openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-        openrouter_model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-pro-exp-03-25:free")
+        openrouter_model = os.getenv("OPENROUTER_MODEL", "google/gemini-3-pro:free")
         
         if openrouter_api_key and OPENAI_AVAILABLE:
             generation_config = {

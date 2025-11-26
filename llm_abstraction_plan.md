@@ -121,7 +121,7 @@ Add to `.env`:
 ```
 # Google Gemini
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-pro-exp-03-25
+GEMINI_MODEL=gemini-3-pro
 
 # OpenRouter
 OPENROUTER_API_KEY=your_openrouter_api_key
