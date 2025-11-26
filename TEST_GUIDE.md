@@ -120,7 +120,7 @@ export LITELLM_API_KEY="your_litellm_key"
 export LITELLM_MODEL="your_litellm_model"
 
 # Model configuration
-export HEAVY_MODELS="gemini-2.5-pro-exp-03-25,gpt-4-turbo,claude-3-opus"
+export HEAVY_MODELS="gemini-3-pro,gpt-4-turbo,claude-3-opus"
 export LIGHT_MODELS="gemini-1.5-flash,gpt-3.5-turbo,claude-3-haiku"
 
 # Optional configuration

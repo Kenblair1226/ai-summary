@@ -17,7 +17,7 @@ class TestLLMConfiguration(unittest.TestCase):
         # Test with only Gemini configured
         env_vars = {
             'GEMINI_API_KEY': 'test_key',
-            'HEAVY_MODELS': 'gemini-2.5-pro-exp-03-25',
+            'HEAVY_MODELS': 'gemini-3-pro',
             'LIGHT_MODELS': 'gemini-1.5-flash'
         }
         
@@ -39,7 +39,7 @@ class TestLLMConfiguration(unittest.TestCase):
             'LITELLM_API_KEY': 'test_litellm_key',
             'LITELLM_MODEL': 'test_model',
             'DEFAULT_LLM_PROVIDER': 'openrouter',
-            'HEAVY_MODELS': 'gemini-2.5-pro-exp-03-25,gpt-4-turbo,claude-3-opus',
+            'HEAVY_MODELS': 'gemini-3-pro,gpt-4-turbo,claude-3-opus',
             'LIGHT_MODELS': 'gemini-1.5-flash,gpt-3.5-turbo,claude-3-haiku'
         }
         
@@ -61,7 +61,7 @@ class TestLLMConfiguration(unittest.TestCase):
     def test_missing_api_keys(self):
         """Test system behavior with missing API keys"""
         env_vars = {
-            'HEAVY_MODELS': 'gemini-2.5-pro-exp-03-25',
+            'HEAVY_MODELS': 'gemini-3-pro',
             'LIGHT_MODELS': 'gemini-1.5-flash'
         }
         
@@ -77,7 +77,7 @@ class TestLLMConfiguration(unittest.TestCase):
         env_vars = {
             'GEMINI_API_KEY': 'test_key',
             'DEFAULT_LLM_PROVIDER': 'invalid_provider',
-            'HEAVY_MODELS': 'gemini-2.5-pro-exp-03-25',
+            'HEAVY_MODELS': 'gemini-3-pro',
             'LIGHT_MODELS': 'gemini-1.5-flash'
         }
         

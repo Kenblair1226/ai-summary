@@ -246,7 +246,7 @@ class LLMService:
         """Initialize available providers from environment variables"""
         # Gemini setup
         gemini_api_key = os.getenv("GEMINI_API_KEY")
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-exp-03-25")
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3-pro")
         system_prompt = os.getenv("SYSTEM_PROMPT", "")
         
         if gemini_api_key:
@@ -520,7 +520,7 @@ Update your `.env` file to include:
 ```
 # Google Gemini
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-pro-exp-03-25
+GEMINI_MODEL=gemini-3-pro
 GEMINI_TEMPERATURE=1.0
 GEMINI_TOP_P=0.95
 GEMINI_TOP_K=40

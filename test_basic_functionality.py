@@ -17,7 +17,7 @@ def test_basic_imports():
     try:
         # Set up minimal environment
         os.environ['GEMINI_API_KEY'] = 'test_key'
-        os.environ['HEAVY_MODELS'] = 'gemini-2.5-pro-exp-03-25'
+        os.environ['HEAVY_MODELS'] = 'gemini-3-pro'
         os.environ['LIGHT_MODELS'] = 'gemini-1.5-flash'
         
         # Mock external dependencies
