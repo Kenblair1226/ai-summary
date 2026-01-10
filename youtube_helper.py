@@ -1,145 +1,114 @@
-import json
 import os
 import re
 import logging
-from shutil import Error
-import subprocess
-from typing import Tuple
-from pytubefix import YouTube, Channel
-from db_helper import initialize_db, get_checked_video_ids, save_checked_video_ids, connect_db
+import yt_dlp
+
 
 def get_youtube_title(video_url):
-    """Fetches the title of a YouTube video."""
+    """Fetches the title of a YouTube video using yt-dlp."""
     try:
-        # Primary: Custom Node.js script via generate_youtube_token()
-        logging.info(f"Attempting generate_youtube_token() method for {video_url}")
-        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
-        return yt.title
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+            return info.get('title')
     except Exception as e:
-        logging.error(f"Error fetching title with generate_youtube_token() for {video_url}: {e}")
-        
-        # Secondary: Built-in PO token method (WEB client with botguard)
-        try:
-            logging.info(f"Attempting built-in po_token fallback for {video_url}")
-            yt = YouTube(
-                video_url,
-                client="WEB",
-                use_po_token=True,
-                allow_oauth_cache=True
-            )
-            return yt.title
-        except Exception as builtin_error:
-            logging.error(f"Built-in po_token failed for {video_url}: {builtin_error}")
-            
-            # Final: No PO token
-            try:
-                logging.info(f"Attempting final fallback without po_token for {video_url}")
-                yt = YouTube(video_url, use_po_token=False)
-                return yt.title
-            except Exception as final_error:
-                logging.error(f"All fallback methods failed for {video_url}: {final_error}")
-                return None
+        logging.error(f"Error fetching title for {video_url}: {e}")
+        return None
+
 
 def download_audio_from_youtube(video_url, output_path):
+    """Downloads audio from YouTube video as MP3 using yt-dlp."""
     try:
-        # Primary: Custom Node.js script via generate_youtube_token()
-        logging.info(f"Attempting generate_youtube_token() method for {video_url}")
-        yt = YouTube(video_url, use_po_token=True, po_token_verifier=po_token_verifier)
-    except Exception as e:
-        logging.error(f"Error downloading audio with generate_youtube_token() for {video_url}: {e}")
+        # Ensure output directory exists
+        os.makedirs(output_path, exist_ok=True)
         
-        # Secondary: Built-in PO token method (WEB client with botguard)
-        try:
-            logging.info(f"Attempting built-in po_token fallback for {video_url}")
-            yt = YouTube(
-                video_url,
-                client="WEB",
-                use_po_token=True,
-                allow_oauth_cache=True
-            )
-        except Exception as builtin_error:
-            logging.error(f"Built-in po_token failed for {video_url}: {builtin_error}")
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'quiet': False,
+            'no_warnings': False,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            logging.info(f"Downloading audio from {video_url}")
+            info = ydl.extract_info(video_url, download=True)
+            title = info.get('title')
             
-            # Final: No PO token
-            try:
-                logging.info(f"Attempting final fallback without po_token for {video_url}")
-                yt = YouTube(video_url, use_po_token=False)
-            except Exception as final_error:
-                logging.error(f"All fallback methods failed for {video_url}: {final_error}")
-                raise
-    
-    title = yt.title
-    logging.info(f"Downloading audio from {video_url} with title: {title}")
-    audio_stream = yt.streams.filter(only_audio=True).first()
-    audio_file = audio_stream.download(output_path=output_path)
-    
-    base, _ = os.path.splitext(audio_file)
-    new_file = base + '.mp3'
-    
-    subprocess.run(['ffmpeg', '-i', audio_file, new_file])
-    os.remove(audio_file)
-    
-    # Log the size of the downloaded MP3 file
-    file_size = os.path.getsize(new_file)
-    size_mb = file_size / (1024 * 1024)  # Convert to MB
-    logging.info(f"Downloaded MP3 file size: {size_mb:.2f} MB ({file_size:,} bytes)")
-    
-    return title, new_file
+            # yt-dlp converts to mp3, construct the output filename
+            # The file will be named based on the title
+            safe_title = ydl.prepare_filename(info)
+            base, _ = os.path.splitext(safe_title)
+            new_file = base + '.mp3'
+            
+            # Log the size of the downloaded MP3 file
+            if os.path.exists(new_file):
+                file_size = os.path.getsize(new_file)
+                size_mb = file_size / (1024 * 1024)
+                logging.info(f"Downloaded MP3 file size: {size_mb:.2f} MB ({file_size:,} bytes)")
+            
+            return title, new_file
+            
+    except Exception as e:
+        logging.error(f"Error downloading audio from {video_url}: {e}")
+        raise
+
 
 def check_new_videos(channel_url, db):
-    """Check for new videos, using DbHelper instead of raw connection"""
+    """Check for new videos using yt-dlp, using DbHelper instead of raw connection"""
     # Get existing video IDs from database
     with db.get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT video_id FROM videos')
         checked_video_ids = {row[0] for row in cursor.fetchall()}
     
-    channel = Channel(channel_url)
-    new_videos = [video for video in channel.videos[:5] if video.video_id not in checked_video_ids]
-    
-    if new_videos:
-        # Save new video IDs using DbHelper
-        db.save_checked_video_ids(channel_url, [video.video_id for video in new_videos])
-    
-    return new_videos
-
-def cmd(command, check=True, shell=True, capture_output=True, text=True):
-    """
-    Runs a command in a shell, and throws an exception if the return code is non-zero.
-    :param command: any shell command.
-    :return:
-    """
     try:
-        return subprocess.run(command, check=check, shell=shell, capture_output=capture_output, text=text)
-    except subprocess.CalledProcessError as error:
-        raise Error(f"\"{command}\" return exit code: {error.returncode}")
-
-def po_token_verifier() -> Tuple[str, str]:
-    token_object = generate_youtube_token()
-    return token_object["visitorData"], token_object["poToken"]
-
-
-def generate_youtube_token() -> dict:
-    try:
-        # Add timeout to prevent hanging
-        result = subprocess.run(
-            ["node", "scripts/youtube-token-generator.js"], 
-            capture_output=True, 
-            text=True, 
-            timeout=30,  # 30 second timeout
-            check=True
-        )
-        data = json.loads(result.stdout)
-        return data
-    except subprocess.TimeoutExpired:
-        logging.error("YouTube token generation timed out after 30 seconds")
-        raise Exception("YouTube token generation timed out")
-    except subprocess.CalledProcessError as e:
-        logging.error(f"YouTube token generation failed with exit code {e.returncode}: {e.stderr}")
-        raise Exception(f"YouTube token generation failed: {e.stderr}")
-    except json.JSONDecodeError as e:
-        logging.error(f"Failed to parse YouTube token JSON: {e}")
-        raise Exception("Invalid JSON response from token generator")
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,
+            'playlistend': 5,  # Only check last 5 videos
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(channel_url, download=False)
+            
+            if 'entries' not in info:
+                logging.warning(f"No entries found for channel: {channel_url}")
+                return []
+            
+            new_videos = []
+            new_video_ids = []
+            
+            for entry in info['entries'][:5]:
+                if entry is None:
+                    continue
+                video_id = entry.get('id')
+                if video_id and video_id not in checked_video_ids:
+                    new_videos.append({
+                        'video_id': video_id,
+                        'title': entry.get('title'),
+                        'url': entry.get('url') or f"https://www.youtube.com/watch?v={video_id}"
+                    })
+                    new_video_ids.append(video_id)
+            
+            if new_video_ids:
+                # Save new video IDs using DbHelper
+                db.save_checked_video_ids(channel_url, new_video_ids)
+            
+            return new_videos
+            
+    except Exception as e:
+        logging.error(f"Error checking new videos for {channel_url}: {e}")
+        return []
 
 def is_valid_youtube_url(url):
     """Check if URL is a valid YouTube video URL"""
@@ -163,20 +132,15 @@ def extract_video_id(url):
     return None
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    
     video_url = "https://youtu.be/hBMoPUAeLnY"
     output_path = "test"
-    audio_file = download_audio_from_youtube(video_url, output_path)
+    
+    # Test getting title
+    title = get_youtube_title(video_url)
+    print(f"Video title: {title}")
+    
+    # Test downloading audio
+    title, audio_file = download_audio_from_youtube(video_url, output_path)
     print(f"Audio file saved to: {audio_file}")
-    
-    # db_path = os.getenv('DB_PATH', 'database.db')
-    # conn = connect_db(db_path)
-    # initialize_db(conn)
-    
-    # channel_url = "https://youtube.com/@sharptechpodcast"
-    # new_video_ids = check_new_videos(channel_url, conn)
-    # if new_video_ids:
-    #     print(f"New videos found: {new_video_ids}")
-    # else:
-    #     print("No new videos found.")
-    
-    # conn.close()
