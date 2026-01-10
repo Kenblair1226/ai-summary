@@ -124,6 +124,42 @@ class GeminiProvider(LLMProvider):
             generation_config=self.generation_config,
             system_instruction=[self.system_prompt] if self.system_prompt else None
         )
+        # Set maximum input tokens (slightly below the limit to be safe)
+        self.max_input_tokens = 1000000  # 1M tokens
+    
+    def _chunk_content(self, content: Union[str, List, Dict]) -> List[Union[str, List, Dict]]:
+        """Split content into chunks that fit within token limits"""
+        if isinstance(content, str):
+            # Simple string splitting - in practice you might want to use a more sophisticated
+            # tokenizer, but this works for basic cases
+            words = content.split()
+            chunks = []
+            current_chunk = []
+            current_length = 0
+            
+            for word in words:
+                # Rough estimate: 1.3 tokens per word on average
+                word_tokens = len(word.split()) * 1.3
+                if current_length + word_tokens > self.max_input_tokens:
+                    chunks.append(" ".join(current_chunk))
+                    current_chunk = [word]
+                    current_length = word_tokens
+                else:
+                    current_chunk.append(word)
+                    current_length += word_tokens
+            
+            if current_chunk:
+                chunks.append(" ".join(current_chunk))
+            return chunks
+        elif isinstance(content, list):
+            # For lists, we'll process each item individually
+            return [self._chunk_content(item) for item in content]
+        elif isinstance(content, dict):
+            # For dicts, we'll process the text content
+            if 'text' in content:
+                return [{'text': chunk} for chunk in self._chunk_content(content['text'])]
+            return [content]
+        return [content]
     
     def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
@@ -143,11 +179,12 @@ class GeminiProvider(LLMProvider):
             if self.is_rate_limited(e):
                 logging.warning("Rate limit hit for Gemini")
             raise
-    
+
     def generate_content_with_media(self, prompt: str, media_file: str) -> LLMResponse:
         try:
             response = self.model.generate_content([prompt, media_file])
             if hasattr(response, 'text'):
+                logging.debug(f"Received response from Gemini: {response.text[:200]}...")  # Log first 200 chars
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
         except Exception as e:
