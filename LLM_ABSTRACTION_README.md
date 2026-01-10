@@ -28,7 +28,7 @@ Configure your LLM providers in the `.env` file. You can use the `.env.example` 
 
 # Google Gemini Configuration
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-pro-exp-03-25
+GEMINI_MODEL=gemini-3-pro
 GEMINI_TEMPERATURE=1.0
 GEMINI_TOP_P=0.95
 GEMINI_TOP_K=40
@@ -120,7 +120,7 @@ This will:
 ### Google Gemini
 - Supports text and media inputs (images, audio, video)
 - Configuration via `GEMINI_*` environment variables
-- Default model: `gemini-2.5-pro-exp-03-25`
+- Default model: `gemini-3-pro`
 
 ### OpenRouter
 - Primarily supports text inputs
