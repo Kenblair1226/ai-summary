@@ -112,18 +112,14 @@ class LiteLLMProvider(LLMProvider):
         ])
 
 # Import Gemini provider implementation
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 
 class GeminiProvider(LLMProvider):
     """Implementation for Google Gemini"""
     
     def setup(self) -> None:
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(
-            model_name=self.model_name,
-            generation_config=self.generation_config,
-            system_instruction=[self.system_prompt] if self.system_prompt else None
-        )
+        self.client = genai.Client(api_key=self.api_key)
         # Set maximum input tokens (slightly below the limit to be safe)
         self.max_input_tokens = 1000000  # 1M tokens
     
@@ -164,13 +160,23 @@ class GeminiProvider(LLMProvider):
     def generate_content(self, prompt: Union[str, List, Dict], **kwargs) -> LLMResponse:
         try:
             # Merge kwargs with generation_config, with kwargs taking precedence
-            if kwargs:
-                config = {**self.generation_config, **kwargs}
-                # Create a new GenerationConfig for this specific request
-                generation_config = genai.GenerationConfig(**config)
-                response = self.model.generate_content(prompt, generation_config=generation_config)
-            else:
-                response = self.model.generate_content(prompt)
+            config = {**self.generation_config, **kwargs}
+            
+            # Build the GenerateContentConfig
+            generate_config = genai_types.GenerateContentConfig(
+                system_instruction=self.system_prompt if self.system_prompt else None,
+                temperature=config.get("temperature"),
+                top_p=config.get("top_p"),
+                top_k=config.get("top_k"),
+                max_output_tokens=config.get("max_output_tokens"),
+                response_mime_type=config.get("response_mime_type"),
+            )
+            
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=generate_config
+            )
             if hasattr(response, 'text'):
                 return LLMResponse(response.text, response)
             return LLMResponse(str(response), response)
@@ -182,7 +188,24 @@ class GeminiProvider(LLMProvider):
 
     def generate_content_with_media(self, prompt: str, media_file: str) -> LLMResponse:
         try:
-            response = self.model.generate_content([prompt, media_file])
+            # Upload the file using the Files API
+            uploaded_file = self.client.files.upload(file=media_file)
+            
+            # Build the GenerateContentConfig
+            generate_config = genai_types.GenerateContentConfig(
+                system_instruction=self.system_prompt if self.system_prompt else None,
+                temperature=self.generation_config.get("temperature"),
+                top_p=self.generation_config.get("top_p"),
+                top_k=self.generation_config.get("top_k"),
+                max_output_tokens=self.generation_config.get("max_output_tokens"),
+                response_mime_type=self.generation_config.get("response_mime_type"),
+            )
+            
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[prompt, uploaded_file],
+                config=generate_config
+            )
             if hasattr(response, 'text'):
                 logging.debug(f"Received response from Gemini: {response.text[:200]}...")  # Log first 200 chars
                 return LLMResponse(response.text, response)
