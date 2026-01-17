@@ -1,4 +1,5 @@
 import os
+import re
 import abc
 import logging
 from typing import Dict, List, Union, Optional, Any
@@ -189,7 +190,11 @@ class GeminiProvider(LLMProvider):
     def generate_content_with_media(self, prompt: str, media_file: str) -> LLMResponse:
         try:
             # Upload the file using the Files API
-            uploaded_file = self.client.files.upload(file=media_file)
+            # Use a sanitized display name to avoid ASCII encoding issues with non-ASCII filenames
+            original_name = os.path.basename(media_file)
+            # Remove non-ASCII characters from display name
+            sanitized_name = re.sub(r'[^\x00-\x7F]+', '_', original_name)
+            uploaded_file = self.client.files.upload(file=media_file, config={"display_name": sanitized_name})
             
             # Build the GenerateContentConfig
             generate_config = genai_types.GenerateContentConfig(
