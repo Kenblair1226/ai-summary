@@ -2,10 +2,15 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install system dependencies (ffmpeg for yt-dlp audio extraction)
+# Install system dependencies (ffmpeg for yt-dlp audio extraction, curl/unzip for deno)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg curl unzip && \
     rm -rf /var/lib/apt/lists/*
+
+# Install deno (JavaScript runtime for yt-dlp YouTube extraction)
+RUN curl -fsSL https://deno.land/install.sh | sh
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 
 # Install Python dependencies
 COPY requirements.txt .
