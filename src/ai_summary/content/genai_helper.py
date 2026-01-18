@@ -1,6 +1,6 @@
 import re
 import logging
-from llm_provider import llm_service, LLMResponse
+from ai_summary.core import llm_service, LLMResponse
 
 def fetch_web_context_for_article(title, content_snippet):
     """Generate search queries for web context. The actual fetching will be done by the caller.

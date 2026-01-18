@@ -2,19 +2,23 @@ import os
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, ContextTypes
-from db_helper import DbHelper
 import asyncio
 import logging
 import re
 from urllib.parse import urlparse, parse_qs
 import uuid
 import shutil
-from youtube_helper import check_new_videos, is_valid_youtube_url, extract_video_id, get_youtube_title, download_audio_from_youtube
-from summarize_and_post import post_to_wordpress, post_to_ghost
-from genai_helper import summarize_youtube_video, article_mp3
 
-# Import Gemini related components from main.py
-# from main import video_model, types
+from ai_summary.core import DbHelper
+from ai_summary.content import (
+    is_valid_youtube_url,
+    extract_video_id,
+    get_youtube_title,
+    download_audio_from_youtube,
+    article_mp3,
+    post_to_wordpress,
+    post_to_ghost,
+)
 
 load_dotenv()
 db = DbHelper(os.getenv('DB_PATH', 'database.db'))

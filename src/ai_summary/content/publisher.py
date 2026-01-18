@@ -4,14 +4,15 @@ import requests
 from base64 import b64encode
 import jwt
 import datetime
-from genai_helper import article_mp3, generate_slug, humanize_content
-from youtube_helper import download_audio_from_youtube
 import uuid
 import shutil
 import json
 import re
 from urllib.parse import urlparse
 import mimetypes
+
+from ai_summary.content.genai_helper import generate_slug, humanize_content
+from ai_summary.content.youtube_helper import download_audio_from_youtube
 
 load_dotenv()
 

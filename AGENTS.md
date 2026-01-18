@@ -6,6 +6,40 @@ Guidelines for AI coding agents working in this repository.
 
 Content aggregation and AI summarization system that monitors YouTube channels, RSS feeds, and podcasts, processes content through multi-provider LLM summarization, and publishes to WordPress, Ghost, and Telegram.
 
+## Project Structure
+
+```
+ai-summary/
+├── src/
+│   └── ai_summary/              # Main package
+│       ├── __init__.py
+│       ├── main.py              # Entry point, scheduled tasks
+│       ├── core/                # Core infrastructure
+│       │   ├── __init__.py
+│       │   ├── llm_provider.py  # LLM abstraction layer
+│       │   └── db_helper.py     # Database operations
+│       ├── content/             # Content processing
+│       │   ├── __init__.py
+│       │   ├── youtube_helper.py
+│       │   ├── genai_helper.py  # AI summarization
+│       │   └── publisher.py     # WordPress/Ghost publishing
+│       └── interfaces/          # External interfaces
+│           ├── __init__.py
+│           └── telegram_bot.py
+├── tests/                       # Test suite
+│   ├── conftest.py              # Shared fixtures
+│   └── fixtures/
+├── docs/                        # Documentation
+│   ├── LLM_ABSTRACTION_README.md
+│   └── llm_provider_implementation.md
+├── data/                        # Database storage
+├── public/                      # Static assets (thumbnails)
+├── run.py                       # Application entry point
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
+```
+
 ## Build & Run Commands
 
 ```bash
@@ -13,13 +47,13 @@ Content aggregation and AI summarization system that monitors YouTube channels, 
 pip install -r requirements.txt
 
 # Run main application
-python main.py
+python run.py
 
-# Test LLM provider abstraction
-python test_llm_provider.py
+# Or run directly from module
+PYTHONPATH=src python -m ai_summary.main
 
 # Initialize database only
-python db_helper.py
+PYTHONPATH=src python -c "from ai_summary.core import DbHelper; db = DbHelper('database.db'); db.initialize_db()"
 ```
 
 ### Docker
@@ -35,20 +69,15 @@ docker run -v ./data:/data --env-file .env ai-summary
 
 ### Testing
 
-No formal test framework is configured. Tests are run as standalone scripts:
-
 ```bash
-# Run LLM provider tests
-python test_llm_provider.py
+# Run all tests
+pytest tests/ -v
 
 # Run a single test file
-python <test_file>.py
-```
-
-For future test additions, use `pytest` with `unittest.mock`:
-```bash
 pytest tests/test_module.py -v
-pytest tests/test_module.py::TestClass::test_method -v  # Single test
+
+# Run specific test
+pytest tests/test_module.py::TestClass::test_method -v
 ```
 
 ## Code Style Guidelines
@@ -59,7 +88,7 @@ pytest tests/test_module.py::TestClass::test_method -v  # Single test
 
 ### Import Organization
 
-Order imports as follows (no blank lines between groups in existing code):
+Order imports as follows:
 
 ```python
 # 1. Standard library imports
@@ -79,10 +108,10 @@ import requests
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 
-# 3. Local module imports
-from db_helper import DbHelper
-from llm_provider import llm_service, LLMResponse
-from youtube_helper import check_new_videos, download_audio_from_youtube
+# 3. Local package imports
+from ai_summary.core import DbHelper, llm_service, LLMResponse
+from ai_summary.content import check_new_videos, download_audio_from_youtube
+from ai_summary.interfaces import notify_subscribers
 ```
 
 ### Naming Conventions
@@ -239,22 +268,18 @@ self._local = threading.local()
 
 ## Architecture Notes
 
-### Key Modules
+### Package Structure
 
-- `main.py` - Entry point, scheduled tasks at 00:00 and 12:00 daily
-- `llm_provider.py` - LLM abstraction layer (Gemini, OpenRouter, LiteLLM)
-- `genai_helper.py` - AI summarization functions
-- `db_helper.py` - Thread-safe SQLite with connection pooling
-- `youtube_helper.py` - YouTube API and audio extraction
-- `summarize_and_post.py` - WordPress/Ghost publishing
-- `telegram_bot.py` - User notifications
+- `ai_summary.core` - Core infrastructure (LLM providers, database)
+- `ai_summary.content` - Content processing (YouTube, AI summarization, publishing)
+- `ai_summary.interfaces` - External interfaces (Telegram bot)
 
 ### LLM Provider System
 
 Uses abstraction layer with automatic fallback on rate limiting:
 
 ```python
-from llm_provider import llm_service
+from ai_summary.core import llm_service
 
 # Text generation
 response = llm_service.generate_content(prompt, model_tier="heavy")
@@ -270,6 +295,8 @@ Model tiers: `"heavy"` for complex tasks, `"light"` for simple queries.
 Thread-safe SQLite with `DbHelper` class:
 
 ```python
+from ai_summary.core import DbHelper
+
 db = DbHelper(os.getenv('DB_PATH', 'database.db'))
 db.initialize_db()
 

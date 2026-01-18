@@ -10,13 +10,20 @@ from bs4 import BeautifulSoup
 import requests
 from dotenv import load_dotenv
 import urllib.request
-from db_helper import DbHelper
-from youtube_helper import check_new_videos, get_youtube_title, download_audio_from_youtube
-from genai_helper import summarize_youtube_video, article_mp3, summarize_article
-from summarize_and_post import post_to_wordpress, post_to_ghost
-from telegram_bot import notify_subscribers, start_bot
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
+
+from ai_summary.core import DbHelper
+from ai_summary.content import (
+    check_new_videos,
+    get_youtube_title,
+    download_audio_from_youtube,
+    article_mp3,
+    summarize_article,
+    post_to_wordpress,
+    post_to_ghost,
+)
+from ai_summary.interfaces import notify_subscribers, start_bot
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

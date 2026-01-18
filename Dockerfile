@@ -17,12 +17,15 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY src/ ./src/
+COPY run.py .
+COPY public/ ./public/
 
 # Create directory for database and media files
 RUN mkdir -p /data
 
 # Set environment variable for database path
 ENV DB_PATH=/data/database.db
+ENV PYTHONPATH=/app/src
 
-CMD ["python", "main.py"]
+CMD ["python", "run.py"]
