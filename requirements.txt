@@ -4,7 +4,8 @@ beautifulsoup4
 feedparser
 python-dotenv
 requests
-yt-dlp
+yt-dlp[default,curl-cffi]
+bgutil-ytdlp-pot-provider
 schedule
 python-telegram-bot
 PyJWT

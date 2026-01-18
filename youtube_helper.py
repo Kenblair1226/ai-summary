@@ -36,8 +36,8 @@ def download_audio_from_youtube(video_url, output_path):
             }],
             'quiet': False,
             'no_warnings': False,
-            # Use android client to avoid SABR streaming issues
-            'extractor_args': {'youtube': {'player_client': ['android_creator', 'ios', 'web']}},
+            # Use web client with getpot for PO token generation
+            'extractor_args': {'youtube': {'player_client': ['web']}},
             # Restrict filenames to ASCII to avoid encoding issues with non-ASCII characters
             'restrictfilenames': True,
         }
