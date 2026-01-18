@@ -36,6 +36,8 @@ def download_audio_from_youtube(video_url, output_path):
             }],
             'quiet': False,
             'no_warnings': False,
+            # Use android client to avoid SABR streaming issues
+            'extractor_args': {'youtube': {'player_client': ['android_creator', 'ios', 'web']}},
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
