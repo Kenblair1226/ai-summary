@@ -5,6 +5,7 @@ feedparser
 python-dotenv
 requests
 yt-dlp[default,curl-cffi]
+yt-dlp-ejs>=0.7.0
 bgutil-ytdlp-pot-provider
 schedule
 python-telegram-bot
